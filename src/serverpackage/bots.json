@@ -1,0 +1,34 @@
+{
+   "1": {
+      "id": 1,
+      "symbol": "xrp",
+      "threshold": 3
+   },
+   "2": {
+      "id": 2,
+      "symbol": "btc",
+      "threshold": 3
+   },
+   "3": {
+      "id": 3,
+      "symbol": "eth",
+      "threshold": 3
+   },
+   "4": {
+      "id": 4,
+      "symbol": "sol",
+      "threshold": 3
+   },
+   "5": {
+      "id": 5,
+      "symbol": "sol",
+      "threshold": 5
+   },
+   "7": {
+      "id": 7,
+      "symbol": "sol",
+      "threshold": 5,
+      "running": false,
+      "handlers": []
+   }
+}

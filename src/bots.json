@@ -1,0 +1,9 @@
+{
+   "7": {
+      "id": 7,
+      "symbol": "sol",
+      "threshold": 5,
+      "running": false,
+      "handlers": []
+   }
+}
