@@ -78,3 +78,9 @@ def get_current_admin(payload: dict = Depends(get_current_user_token_payload)) -
             detail="Zugriff verweigert. Nur für Admins gestattet."
         )
     return payload
+
+def get_current_user(payload: dict = Depends(get_current_user_token_payload)) -> dict:
+    # payload wurde bereits von get_current_user_token_payload validiert.
+    # Wir können hier optional noch prüfen, ob der User gesperrt ist etc.,
+    # aber für den Anfang reicht es, das Payload (oder die ID) zurückzugeben.
+    return payload

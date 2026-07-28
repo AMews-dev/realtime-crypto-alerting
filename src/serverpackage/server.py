@@ -4,11 +4,14 @@ import uvicorn
 from fastapi import FastAPI, HTTPException, Request, Depends, status, Response, APIRouter, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from limits.strategies import RateLimiter
+from sqlalchemy import Null
 from sqlalchemy.orm import Session
 from botpackage.manager import BotManager
-from serverpackage.utils.security import hash_password, verify_pw, create_access_token, get_current_admin
+from serverpackage.utils.security import hash_password, verify_pw, create_access_token, get_current_admin, \
+    get_current_user
 from serverpackage.utils.utils import FindUser
-from shared.schemas import CreateUser, UserLogin, BotCreateSchema, BotCreateResponseSchema, StopBotSchema
+from shared.schemas import CreateUser, UserLogin, BotCreateSchema, BotCreateResponseSchema, StopBotSchema, \
+    CreateAlertSchema, CreateAlertResponseSchema
 from contextlib import asynccontextmanager
 import sys
 from database import check_db_connection, Base, engine, get_db, SessionLocal
@@ -26,6 +29,7 @@ import asyncio
 notification_queue = asyncio.Queue()
 db = SessionLocal()
 manager = BotManager(db_session=db, notification_queue=notification_queue)
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -75,8 +79,6 @@ def test():
     return "Hello World"
 
 
-
-
 @app.post("/createbot", response_model=BotCreateResponseSchema)
 async def createBot(payload: BotCreateSchema, db: Session = Depends(get_db)):
     try:
@@ -112,6 +114,7 @@ async def get_bots(db: Session = Depends(get_db)):
 
     return bots
 
+
 @app.get("/active-bots")
 async def get_all_active_bots(db: Session = Depends(get_db)):
     try:
@@ -133,9 +136,9 @@ async def get_all_active_bots(db: Session = Depends(get_db)):
 
 @app.post("/start/{bot_id}")
 async def start_bot(bot_id: int, db: Session = Depends(get_db)):
-
     result = await manager.start_bot(bot_id, db=db)
     return result
+
 
 def update_bot_status_in_db(symbol: str, db: Session):
     try:
@@ -147,12 +150,50 @@ def update_bot_status_in_db(symbol: str, db: Session):
     except Exception as e:
         print(f"⚠️ Hintergrund-DB-Update fehlgeschlagen: {e}")
 
-@app.post("/stopp")
-async def stopp_bot(payload: StopBotSchema,background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
 
+@app.post("/stopp")
+async def stopp_bot(payload: StopBotSchema, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
     await manager.stop_bot(payload.symbol)
     background_tasks.add_task(update_bot_status_in_db, payload.symbol, db)
     return {"status": "ok", "msg": f"Bot {payload.symbol} wird gestoppt."}
+
+
+@app.post("/create-alert", response_model=CreateAlertResponseSchema)
+def create_alert(payload: CreateAlertSchema, db: Session = Depends(get_db),
+                 current_user_payload: dict = Depends(get_current_user)):
+    # first validate payload
+
+    #validate current user -> get user id check if user exists in db
+    user_id = int(current_user_payload.get("sub"))
+    aktueller_preis = 100.0  # Platzhalter für deine Live-Preis-Logik
+
+    berechneter_target_price = payload.target_price
+    berechnete_direction = payload.direction.upper() if payload.direction else "UP"
+
+    # Logik für Prozent-Alarm
+    if payload.target_percentage is not None:
+        berechneter_target_price = aktueller_preis * (1 + (payload.target_percentage / 100))
+        berechnete_direction = "UP" if payload.target_percentage > 0 else "DOWN"
+
+    # Logik für festen Preis-Alarm (Richtung validieren)
+    elif payload.target_price is not None:
+        berechnete_direction = "UP" if payload.target_price > aktueller_preis else "DOWN"
+
+    alert = PriceAlarm(
+        user_id=user_id,
+        coin_symbol=payload.coin_symbol,
+        activation_price=1000,
+        is_active=payload.is_active,
+        target_percentage=berechneter_target_price,
+        target_price=payload.target_price,
+        direction=berechnete_direction,
+        is_triggered=False
+    )
+    db.add(alert)
+    db.commit()
+    db.refresh(alert)
+    return alert
+
 
 @app.post("/register")
 @limiter.limit("5/minute")
@@ -174,23 +215,25 @@ def register_user(request: Request, user_data: CreateUser, db: Session = Depends
     return {"message": "User erfolgreich registriert"}
 
 
-@app.post("/login")
 @limiter.limit("5/minute")
-def login_user(request: Request, login_data: UserLogin, db: Session = Depends(get_db)):
+@app.post("/login")
+def login_user(request: Request,login_data: UserLogin, response: Response, db: Session = Depends(get_db)):
     user = FindUser(login_data.email, db)
 
-    token_data = {"sub": user.email, "is_admin": user.is_admin}
-    token = create_access_token(token_data)
+    # ⚠️ Kleiner Logik-Fix: Erst das Passwort prüfen, DANACH das Token generieren!
     if not user or not verify_pw(login_data.password, user.hashedPassword):
-        raise HTTPException(status_code=401, detail="email or Password incorrect.")
+        raise HTTPException(status_code=401, detail="Email or Password incorrect.")
 
-    Response.set_cookie(
+    token_data = {"sub": str(user.id), "is_admin": user.isAdmin} # 💡 Tipp: Nutze lieber user.id statt der E-Mail für 'sub'
+    token = create_access_token(token_data)
+
+    response.set_cookie(
         key="access_token",
         value=f"Bearer {token}",
-        httponly=True,  # Absolut sicher vor JavaScript/XSS
-        max_age=1800,  # Matcht die 30 Minuten Ablaufzeit (in Sekunden)
-        samesite="lax",  # Schutz vor CSRF-Angriffen
-        secure=False  # Auf 'True' ändern, sobald du HTTPS nutzt!
+        httponly=True,
+        max_age=1800,
+        samesite="lax",
+        secure=False
     )
 
     return {"status": "Erfolgreich eingeloggt", "is_admin": user.isAdmin}

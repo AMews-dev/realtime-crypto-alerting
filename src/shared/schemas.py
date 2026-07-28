@@ -1,5 +1,5 @@
 from dataclasses import dataclass, asdict
-from pydantic import BaseModel, Field, EmailStr, field_validator
+from pydantic import BaseModel, Field, EmailStr, field_validator, model_validator
 from typing import Optional, List
 import re
 
@@ -8,11 +8,13 @@ import re
 class BotCreateSchema:
     symbol: str
 
+
 @dataclass
 class BotCreateResponseSchema:
     symbol: str
     status: str
     id: int
+
 
 # 1. Ein Schema für den Body definieren
 class StopBotSchema(BaseModel):
@@ -27,6 +29,36 @@ class BotUpdate(BaseModel):
 
 class BotDelete(BaseModel):
     pass
+
+
+class CreateAlertSchema(BaseModel):
+    #user_id: int
+    coin_symbol: str
+    direction: str
+    # Optionale Felder mit Standardwerten belegen
+    activation_price: Optional[float] = None
+    is_active: bool = True
+    target_percentage: Optional[float] = None
+    target_price: Optional[float] = None
+
+    @model_validator(mode="after")
+    def check_price_or_percentage(self):
+        # Wenn BEIDE Felder leer sind, werfen wir einen Fehler
+        if self.target_price is None and self.target_percentage is None:
+            raise ValueError("Du musst entweder einen 'target_price' oder ein 'target_percentage' angeben.")
+        return self
+
+
+@dataclass
+class CreateAlertResponseSchema(BaseModel):
+    user_id: int
+    coin_symbol: str
+    direction: str
+    # Optionale Felder mit Standardwerten belegen
+    activation_price: Optional[float] = None
+    is_active: bool = True
+    target_percentage: Optional[float] = None
+    target_price: Optional[float] = None
 
 
 class CreateUser(BaseModel):
