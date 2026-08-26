@@ -1,6 +1,7 @@
-from sqlalchemy import Column, Integer, String, Boolean, Float, ForeignKey
+from sqlalchemy import Column, Integer, String, Boolean, Float, ForeignKey, DateTime
 from sqlalchemy.orm import relationship
 from shared.user_model import Base
+from datetime import datetime, timezone
 
 
 class PriceAlarm(Base):
@@ -22,5 +23,17 @@ class PriceAlarm(Base):
 
     is_triggered = Column(Boolean, default=False, nullable=False)
 
+    created_at = Column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        nullable=False
+    )
+
+    updated_at = Column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(timezone.utc),
+        nullable=False
+    )
     user = relationship("User", back_populates="alarms")
 

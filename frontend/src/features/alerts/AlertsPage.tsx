@@ -1,22 +1,27 @@
 import { useEffect, useState, type SyntheticEvent } from 'react';
 import { useAuthStore } from '../auth/authStore';
-import { Bell, Trash2, PlusCircle, AlertCircle, CheckCircle2, TrendingDown, Target } from 'lucide-react';
-
-interface AlertItem {
-  id: string;
-  symbol: string;
-  type: 'PERCENTAGE_DROP' | 'TARGET_PRICE';
-  value: number; // z. B. 5 (für 5%) oder 90000 (für $90k)
-  created_at: string;
-}
+import type {  CreateAlertDTO, AlertResponse } from '../../services/alertsApi';
+import { createAlert } from '../../services/alertsApi';
+import { 
+  Bell, 
+  Trash2, 
+  PlusCircle, 
+  AlertCircle, 
+  CheckCircle2, 
+  TrendingDown, 
+  TrendingUp, 
+  Target, 
+  Percent, 
+  Clock 
+} from 'lucide-react';
 
 export function AlertsPage() {
-  const token = useAuthStore((state) => state.token);
-  const [alerts, setAlerts] = useState<AlertItem[]>([]);
+  const isAuthenticated = useAuthStore((state) => state.isAuthenticated)
+  const [alerts, setAlerts] = useState<AlertResponse[]>([]);
   const [loading, setLoading] = useState(true);
   
   // Formular State
-  const [symbol, setSymbol] = useState('BTCUSDT');
+  const [coinsymbol, set_Coinsymbol] = useState('SOL');
   const [type, setType] = useState<'PERCENTAGE_DROP' | 'TARGET_PRICE'>('PERCENTAGE_DROP');
   const [value, setValue] = useState('5');
   const [error, setError] = useState<string | null>(null);
@@ -25,7 +30,7 @@ export function AlertsPage() {
   const fetchAlerts = async () => {
     try {
       const response = await fetch('http://localhost:8000/api/alerts', {
-        headers: { Authorization: `Bearer ${token}` },
+        credentials: "include"
       });
       if (response.ok) {
         const data = await response.json();
@@ -40,45 +45,42 @@ export function AlertsPage() {
 
   useEffect(() => {
     fetchAlerts();
-  }, [token]);
+  }, [isAuthenticated]);
 
   // Neuen Alarm erstellen
   const handleCreateAlert = async (e: SyntheticEvent<HTMLFormElement>) => {
     e.preventDefault();
     setError(null);
 
-    try {
-      const response = await fetch('http://localhost:8000/api/alerts', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          symbol,
-          type,
-          value: parseFloat(value),
-        }),
-      });
+  try {
+      const parsedValue = parseFloat(value);
 
-      if (!response.ok) {
-        throw new Error('Alarm konnte nicht erstellt werden');
-      }
-
+      // Daten exakt für dein Postman-Schema aufbereiten
+      const payload: CreateAlertDTO = {
+        coin_symbol: coinsymbol, // z. B. "SOL" oder "BTC"
+        is_active: true,
+        activation_price: null,
+        // Unterscheidung je nach gewähltem Alert-Typ:
+        target_percentage: type === 'PERCENTAGE_DROP' ? parsedValue : null,
+        target_price: type === 'TARGET_PRICE' ? parsedValue : null,
+        direction: type === 'PERCENTAGE_DROP' ? 'DOWN' : 'UP',
+      };
+      console.log(payload)
+      await createAlert(payload)
       // Liste neu laden und Formular zurücksetzen
       fetchAlerts();
       setValue('5');
     } catch (err: any) {
-      setError(err.message);
+      setError(err.message ||"Alarm konnte nicht erstellt werden");
     }
   };
 
   // Alarm löschen
-  const handleDeleteAlert = async (id: string) => {
+  const handleDeleteAlert = async (id: number) => {
     try {
       const response = await fetch(`http://localhost:8000/api/alerts/${id}`, {
         method: 'DELETE',
-        headers: { Authorization: `Bearer ${token}` },
+        credentials: "include"
       });
 
       if (response.ok) {
@@ -89,160 +91,186 @@ export function AlertsPage() {
     }
   };
 
-  return (
-    <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-      
-      {/* Linke Spalte: Formular zum Erstellen */}
-      <div className="lg:col-span-1 bg-slate-900/60 backdrop-blur-md border border-slate-800 p-6 rounded-2xl h-fit shadow-xl">
-        <div className="flex items-center gap-3 mb-6">
-          <div className="p-2.5 bg-emerald-500/10 rounded-xl text-emerald-400">
-            <PlusCircle className="w-5 h-5" />
-          </div>
-          <h2 className="text-xl font-bold text-white">Neuen Alarm anlegen</h2>
+ return (
+    <div className="max-w-6xl mx-auto p-6 space-y-8">
+      {/* Header */}
+      <div className="flex items-center space-x-3 border-b pb-4 border-gray-200 dark:border-gray-800">
+        <Bell className="w-8 h-8 text-indigo-600 dark:text-indigo-400" />
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Preis-Alarme</h1>
+          <p className="text-sm text-gray-500 dark:text-gray-400">
+            Erstelle und verwalte deine automatischen Benachrichtigungen.
+          </p>
         </div>
-
-        {error && (
-          <div className="mb-4 p-3 bg-rose-500/10 border border-rose-500/20 text-rose-400 rounded-xl text-xs flex items-center gap-2">
-            <AlertCircle className="w-4 h-4 shrink-0" />
-            <span>{error}</span>
-          </div>
-        )}
-
-        <form onSubmit={handleCreateAlert} className="space-y-4">
-          <div>
-            <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">
-              Cryptocurrency
-            </label>
-            <select
-              value={symbol}
-              onChange={(e) => setSymbol(e.target.value)}
-              className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-white text-sm focus:outline-none focus:border-emerald-500"
-            >
-              <option value="BTCUSDT">Bitcoin (BTC/USDT)</option>
-              <option value="ETHUSDT">Ethereum (ETH/USDT)</option>
-              <option value="SOLUSDT">Solana (SOL/USDT)</option>
-            </select>
-          </div>
-
-          <div>
-            <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">
-              Alarm-Typ
-            </label>
-            <div className="grid grid-cols-2 gap-2">
-              <button
-                type="button"
-                onClick={() => {
-                  setType('PERCENTAGE_DROP');
-                  setValue('5');
-                }}
-                className={`flex items-center justify-center gap-1.5 p-2.5 rounded-xl border text-xs font-semibold transition-all ${
-                  type === 'PERCENTAGE_DROP'
-                    ? 'bg-emerald-500/10 border-emerald-500 text-emerald-400'
-                    : 'bg-slate-950 border-slate-800 text-slate-400'
-                }`}
-              >
-                <TrendingDown className="w-3.5 h-3.5" />
-                <span>% Abfall</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setType('TARGET_PRICE');
-                  setValue('90000');
-                }}
-                className={`flex items-center justify-center gap-1.5 p-2.5 rounded-xl border text-xs font-semibold transition-all ${
-                  type === 'TARGET_PRICE'
-                    ? 'bg-emerald-500/10 border-emerald-500 text-emerald-400'
-                    : 'bg-slate-950 border-slate-800 text-slate-400'
-                }`}
-              >
-                <Target className="w-3.5 h-3.5" />
-                <span>Zielpreis ($)</span>
-              </button>
-            </div>
-          </div>
-
-          <div>
-            <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">
-              {type === 'PERCENTAGE_DROP' ? 'Prozentualer Abfall (%)' : 'Zielpreis in USD ($)'}
-            </label>
-            <input
-              type="number"
-              step="any"
-              required
-              value={value}
-              onChange={(e) => setValue(e.target.value)}
-              placeholder={type === 'PERCENTAGE_DROP' ? 'z. B. 5' : 'z. B. 95000'}
-              className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-white text-sm focus:outline-none focus:border-emerald-500"
-            />
-          </div>
-
-          <button
-            type="submit"
-            className="w-full bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-bold py-3 rounded-xl transition-all shadow-lg shadow-emerald-500/20 text-sm mt-2"
-          >
-            Alarm Speichern
-          </button>
-        </form>
       </div>
 
-      {/* Rechte Spalte: Aktive Alarme Liste */}
-      <div className="lg:col-span-2 bg-slate-900/60 backdrop-blur-md border border-slate-800 p-6 rounded-2xl shadow-xl">
-        <div className="flex items-center justify-between mb-6">
-          <div className="flex items-center gap-3">
-            <div className="p-2.5 bg-violet-500/10 rounded-xl text-violet-400">
-              <Bell className="w-5 h-5" />
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        {/* Formular-Spalte */}
+        <div className="lg:col-span-1 bg-white dark:bg-gray-900 p-6 rounded-xl border border-gray-200 dark:border-gray-800 shadow-sm h-fit">
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+            <PlusCircle className="w-5 h-5 text-indigo-500" /> Neuen Alarm anlegen
+          </h2>
+
+          {error && (
+            <div className="mb-4 p-3 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 rounded-lg text-sm flex items-center gap-2">
+              <AlertCircle className="w-4 h-4 shrink-0" />
+              <span>{error}</span>
             </div>
-            <h2 className="text-xl font-bold text-white">Aktive Alarme</h2>
-          </div>
-          <span className="text-xs bg-slate-800 text-slate-300 font-mono px-2.5 py-1 rounded-full border border-slate-700">
-            {alerts.length} Aktiv
-          </span>
+          )}
+
+          <form onSubmit={handleCreateAlert} className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                Crypto-Pair / Symbol
+              </label>
+              <input
+                type="text"
+                value={coinsymbol}
+                onChange={(e) => set_Coinsymbol(e.target.value.toUpperCase())}
+                placeholder="z.B. BTCUSDT, SOL"
+                required
+                className="w-full px-3 py-2 border rounded-lg border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 outline-none"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                Alarm-Typ
+              </label>
+              <select
+                value={type}
+                onChange={(e) => setType(e.target.value as 'PERCENTAGE_DROP' | 'TARGET_PRICE')}
+                className="w-full px-3 py-2 border rounded-lg border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 outline-none"
+              >
+                <option value="PERCENTAGE_DROP">Prozentualer Abfall (%)</option>
+                <option value="TARGET_PRICE">Ziel-Preis ($)</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                {type === 'PERCENTAGE_DROP' ? 'Prozentwert (%)' : 'Zielpreis ($)'}
+              </label>
+              <input
+                type="number"
+                step="any"
+                value={value}
+                onChange={(e) => setValue(e.target.value)}
+                placeholder={type === 'PERCENTAGE_DROP' ? 'z.B. 5' : 'z.B. 95000'}
+                required
+                className="w-full px-3 py-2 border rounded-lg border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 outline-none"
+              />
+            </div>
+
+            <button
+              type="submit"
+              className="w-full py-2 px-4 bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-lg shadow transition-colors flex items-center justify-center gap-2"
+            >
+              <PlusCircle className="w-4 h-4" /> Alarm Speichern
+            </button>
+          </form>
         </div>
 
-        {loading ? (
-          <p className="text-slate-500 text-sm">Lade Alarme...</p>
-        ) : alerts.length === 0 ? (
-          <div className="text-center py-12 border border-dashed border-slate-800 rounded-xl">
-            <CheckCircle2 className="w-8 h-8 text-slate-600 mx-auto mb-2" />
-            <p className="text-slate-400 text-sm">Keine aktiven Alarme vorhanden.</p>
-          </div>
-        ) : (
-          <div className="space-y-3">
-            {alerts.map((alert) => (
-              <div
-                key={alert.id}
-                className="flex items-center justify-between bg-slate-950 border border-slate-800/80 p-4 rounded-xl hover:border-slate-700 transition-all"
-              >
-                <div className="flex items-center gap-4">
-                  <div className="p-2 bg-slate-900 rounded-lg text-slate-300 font-mono text-xs font-bold">
-                    {alert.symbol}
+        {/* Listen-Spalte */}
+        <div className="lg:col-span-2 space-y-4">
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+            Aktive & Vergangene Alarme
+          </h2>
+
+          {loading ? (
+            <div className="p-8 text-center text-gray-500">Alarme werden geladen...</div>
+          ) : alerts.length === 0 ? (
+            <div className="p-8 text-center bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 text-gray-500">
+              Noch keine Alarme vorhanden. Erstelle deinen ersten Alarm auf der linken Seite.
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 gap-4">
+              {alerts.map((alert) => (
+                <div
+                  key={alert.id}
+                  className="bg-white dark:bg-gray-900 p-5 rounded-xl border border-gray-200 dark:border-gray-800 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4"
+                >
+                  <div className="space-y-2">
+                    {/* Header der Karte: Symbol + Badges */}
+                    <div className="flex items-center gap-3">
+                      <span className="text-lg font-bold text-gray-900 dark:text-white">
+                        {alert.coin_symbol}
+                      </span>
+
+                      {/* Direction Badge */}
+                      <span
+                        className={`inline-flex items-center gap-1 text-xs px-2.5 py-0.5 rounded-full font-medium ${
+                          alert.direction === 'DOWN'
+                            ? 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-400'
+                            : 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-400'
+                        }`}
+                      >
+                        {alert.direction === 'DOWN' ? (
+                          <TrendingDown className="w-3 h-3" />
+                        ) : (
+                          <TrendingUp className="w-3 h-3" />
+                        )}
+                        {alert.direction}
+                      </span>
+
+                      {/* Triggered Badge */}
+                      {alert.is_triggered ? (
+                        <span className="inline-flex items-center gap-1 text-xs px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400 font-medium">
+                          <CheckCircle2 className="w-3 h-3" /> Ausgelöst
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 text-xs px-2.5 py-0.5 rounded-full bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-400 font-medium">
+                          Aktiv
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Alarm-Details (Ziel-Preis oder Prozent) */}
+                    <div className="flex flex-wrap items-center gap-4 text-sm text-gray-600 dark:text-gray-300">
+                      {alert.target_percentage !== null && (
+                        <div className="flex items-center gap-1">
+                          <Percent className="w-4 h-4 text-gray-400" />
+                          <span>Ziel-Abfall: <strong>{alert.target_percentage}%</strong></span>
+                        </div>
+                      )}
+
+                      {alert.target_price !== null && (
+                        <div className="flex items-center gap-1">
+                          <Target className="w-4 h-4 text-gray-400" />
+                          <span>Ziel-Preis: <strong>${alert.target_price}</strong></span>
+                        </div>
+                      )}
+
+                      {alert.activation_price !== null && (
+                        <div className="text-xs text-gray-400">
+                          (Startpreis: ${alert.activation_price})
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Datumsanzeige */}
+                    <div className="flex items-center gap-1 text-xs text-gray-400">
+                      <Clock className="w-3 h-3" />
+                      <span>Erstellt am: {new Date(alert.created_at).toLocaleString('de-DE')}</span>
+                    </div>
                   </div>
-                  <div>
-                    <span className="text-sm font-semibold text-white block">
-                      {alert.type === 'PERCENTAGE_DROP'
-                        ? `Fällt um mindestens ${alert.value}%`
-                        : `Erreicht Zielpreis von $${alert.value.toLocaleString()}`}
-                    </span>
-                    <span className="text-xs text-slate-500">
-                      Typ: {alert.type === 'PERCENTAGE_DROP' ? 'Prozentual' : 'Absolut'}
-                    </span>
+
+                  {/* Aktionen */}
+                  <div className="flex items-center gap-2 self-end md:self-center">
+                    <button
+                      onClick={() => handleDeleteAlert(alert.id)}
+                      className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
+                      title="Alarm löschen"
+                    >
+                      <Trash2 className="w-5 h-5" />
+                    </button>
                   </div>
                 </div>
-
-                <button
-                  onClick={() => handleDeleteAlert(alert.id)}
-                  className="p-2 text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 rounded-lg transition-colors"
-                  title="Alarm löschen"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </button>
-              </div>
-            ))}
-          </div>
-        )}
+              ))}
+            </div>
+          )}
+        </div>
       </div>
-
     </div>
   );
 }

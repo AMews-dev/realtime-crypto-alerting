@@ -10,7 +10,7 @@ interface CoinData {
 }
 
 export function DashboardPage() {
-  const token = useAuthStore((state) => state.token);
+  const token = useAuthStore((state) => state.isAuthenticated);
   const [coins, setCoins] = useState<Record<string, CoinData>>({
     BTCUSDT: { symbol: 'BTCUSDT', name: 'Bitcoin', price: 95000, change24h: 2.4 },
     ETHUSDT: { symbol: 'ETHUSDT', name: 'Ethereum', price: 3400, change24h: -1.2 },

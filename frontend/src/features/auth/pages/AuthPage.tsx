@@ -41,7 +41,8 @@ export function AuthPage() {
         const errorData = await response.json().catch(() => null);
         throw new Error(errorData?.detail || 'Ungültige Anmeldedaten');
       }
-
+      const data = await response.json()
+      console.log("Backend-Antwort beim Login:", data); // Kurz prüfen!
       login({ email });
 
       navigate('/');
@@ -70,7 +71,7 @@ export function AuthPage() {
         throw new Error(data.detail || 'Registrierung fehlgeschlagen');
       }
 
-   
+
       login({ email });
 
       navigate('/');

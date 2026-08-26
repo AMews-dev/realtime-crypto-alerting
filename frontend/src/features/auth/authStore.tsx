@@ -3,12 +3,13 @@ import { persist } from 'zustand/middleware';
 
 interface User {
   email: string;
+  is_admin?: boolean;
 }
 
 interface AuthState {
   user: User | null;
   isAuthenticated: boolean;
-  login: (user: User) => void; // 👈 Nur NOCH 1 Parameter (user)
+  login: ( user: User) => void; 
   logout: () => void;
 }
 
@@ -19,7 +20,7 @@ export const useAuthStore = create<AuthState>()(
       isAuthenticated: false,
 
       // Nimmt jetzt nur das user-Objekt entgegen
-      login: (user: User) => {
+      login: ( user: User) => {
         set({
           user: user,
           isAuthenticated: true,

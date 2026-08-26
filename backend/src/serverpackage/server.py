@@ -11,7 +11,7 @@ from serverpackage.utils.security import hash_password, verify_pw, create_access
     get_current_user
 from serverpackage.utils.utils import FindUser
 from shared.schemas import CreateUser, UserLogin, BotCreateSchema, BotCreateResponseSchema, StopBotSchema, \
-    CreateAlertSchema, CreateAlertResponseSchema
+    CreateAlertSchema, CreateAlertResponseSchema, AlertResponseSchema
 from contextlib import asynccontextmanager
 import sys
 from database import check_db_connection, Base, engine, get_db, SessionLocal
@@ -62,7 +62,7 @@ app = FastAPI(lifespan=lifespan)
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 origins = [
-    "http://localhost:8000"
+    "http://localhost:5173"
 ]
 
 app.add_middleware(
@@ -195,9 +195,18 @@ def create_alert(payload: CreateAlertSchema, db: Session = Depends(get_db),
     return alert
 
 
+@app.get("/api/alerts", response_model=list[AlertResponseSchema])
+def get_user_alerts(db: Session = Depends(get_db),
+                    current_user_payload: dict = Depends(get_current_user)):
+    user_id = int(current_user_payload.get("sub"))
+
+    user_alerts = db.query(PriceAlarm).filter(PriceAlarm.user_id == user_id).all()
+    return user_alerts
+
+
 @app.post("/register")
 @limiter.limit("5/minute")
-def register_user(request: Request, user_data: CreateUser, db: Session = Depends(get_db)):
+def register_user(request: Request, user_data: CreateUser, response: Response, db: Session = Depends(get_db)):
     # test if email already exists
     if FindUser(user_data.email, db):
         raise HTTPException(status_code=400, detail="Email existiert")
@@ -212,19 +221,33 @@ def register_user(request: Request, user_data: CreateUser, db: Session = Depends
 
     db.add(new_user)
     db.commit()
+
+    token_data = {"sub": str(new_user.id),
+                  "is_admin": new_user.isAdmin}  # 💡 Tipp: Nutze lieber user.id statt der E-Mail für 'sub'
+    token = create_access_token(token_data)
+
+    response.set_cookie(
+        key="access_token",
+        value=f"Bearer {token}",
+        httponly=True,
+        max_age=1800,
+        samesite="lax",
+        secure=False
+    )
     return {"message": "User erfolgreich registriert"}
 
 
 @limiter.limit("5/minute")
 @app.post("/login")
-def login_user(request: Request,login_data: UserLogin, response: Response, db: Session = Depends(get_db)):
+def login_user(request: Request, login_data: UserLogin, response: Response, db: Session = Depends(get_db)):
     user = FindUser(login_data.email, db)
 
     # ⚠️ Kleiner Logik-Fix: Erst das Passwort prüfen, DANACH das Token generieren!
     if not user or not verify_pw(login_data.password, user.hashedPassword):
         raise HTTPException(status_code=401, detail="Email or Password incorrect.")
 
-    token_data = {"sub": str(user.id), "is_admin": user.isAdmin} # 💡 Tipp: Nutze lieber user.id statt der E-Mail für 'sub'
+    token_data = {"sub": str(user.id),
+                  "is_admin": user.isAdmin}  # 💡 Tipp: Nutze lieber user.id statt der E-Mail für 'sub'
     token = create_access_token(token_data)
 
     response.set_cookie(
