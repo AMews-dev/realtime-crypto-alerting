@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useAuthStore } from '../../auth/authStore';
 import { TrendingUp, TrendingDown, BellPlus, Wifi, WifiOff } from 'lucide-react';
-
+import { CreateAlertModal } from '../../alerts/CreateAlertModal';
 interface CoinData {
   symbol: string;
   name: string;
@@ -10,6 +10,7 @@ interface CoinData {
 }
 
 export function DashboardPage() {
+  const [selectedCoin, setSelectedCoin] = useState<string | null>(null);
   const token = useAuthStore((state) => state.isAuthenticated);
   const [coins, setCoins] = useState<Record<string, CoinData>>({
     BTCUSDT: { symbol: 'BTCUSDT', name: 'Bitcoin', price: 95000, change24h: 2.4 },
@@ -43,72 +44,105 @@ export function DashboardPage() {
     return () => ws.close();
   }, [token]);
 
-  return (
-    <div className="space-y-6">
-      {/* Top Bar / Status */}
-      <div className="flex items-center justify-between bg-slate-900/60 backdrop-blur-md p-6 rounded-2xl border border-slate-800">
-        <div>
-          <h1 className="text-2xl font-bold text-white">Crypto Market Overview</h1>
-          <p className="text-sm text-slate-400 mt-1">Echtzeit-Kurse direkt über dein FastAPI Backend</p>
+ return (
+    <div className="w-full min-h-screen bg-[#0d1117] text-slate-100 p-4 md:p-8">
+      <div className="w-full max-w-[1600px] mx-auto space-y-6">
+        
+        {/* Top Bar / Status */}
+        <div className="flex items-center justify-between bg-slate-900/60 backdrop-blur-md p-5 rounded-xl border border-slate-800">
+          <div>
+            <h1 className="text-xl font-bold text-white">Crypto Market Overview</h1>
+            <p className="text-xs text-slate-400 mt-0.5">Echtzeit-Kurse direkt über dein FastAPI Backend</p>
+          </div>
+          <div className="flex items-center gap-2 px-3 py-1 rounded-full text-xs font-medium border border-slate-700 bg-slate-950">
+            {isConnected ? (
+              <>
+                <Wifi className="w-3.5 h-3.5 text-emerald-400 animate-pulse" />
+                <span className="text-emerald-400">Live Verbunden</span>
+              </>
+            ) : (
+              <>
+                <WifiOff className="w-3.5 h-3.5 text-rose-400" />
+                <span className="text-rose-400">Getrennt</span>
+              </>
+            )}
+          </div>
         </div>
-        <div className="flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium border border-slate-700 bg-slate-950">
-          {isConnected ? (
-            <>
-              <Wifi className="w-4 h-4 text-emerald-400 animate-pulse" />
-              <span className="text-emerald-400">Live Verbunden</span>
-            </>
-          ) : (
-            <>
-              <WifiOff className="w-4 h-4 text-rose-400" />
-              <span className="text-rose-400">Getrennt</span>
-            </>
-          )}
+
+        {/* Tabellenansicht */}
+        <div className="w-full overflow-x-auto rounded-xl border border-slate-800/80 bg-slate-900/30 backdrop-blur-md shadow-xl">
+          <table className="w-full text-left border-collapse">
+            <thead>
+              <tr className="border-b border-slate-800 text-[13px] font-semibold text-slate-400">
+                <th className="py-3.5 px-4">Asset</th>
+                <th className="py-3.5 px-4 text-right">Preis</th>
+                <th className="py-3.5 px-4 text-right">24h Änderung</th>
+                <th className="py-3.5 px-4 text-right hidden sm:table-cell">24h Volumen</th>
+                <th className="py-3.5 px-4 text-right hidden md:table-cell">Marktkapitalisierung</th>
+                <th className="py-3.5 px-4 text-center">Aktion</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-800/50 text-sm font-medium">
+              {Object.values(coins).map((coin) => {
+                const isPositive = coin.change24h >= 0;
+
+                return (
+                  <tr 
+                    key={coin.symbol} 
+                    className="hover:bg-slate-800/40 transition-colors group cursor-pointer"
+                  >
+                    {/* Asset Name & Icon */}
+                    <td className="py-4 px-4 flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-full bg-slate-800 flex items-center justify-center font-bold text-xs text-amber-400 border border-slate-700">
+                        {coin.symbol.slice(0, 3)}
+                      </div>
+                      <div>
+                        <span className="font-bold text-white block">{coin.symbol}</span>
+                        <span className="text-xs text-slate-400">{coin.name}</span>
+                      </div>
+                    </td>
+
+                    {/* Preis */}
+                    <td className="py-4 px-4 text-right font-mono font-semibold text-white">
+                      ${coin.price.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 4 })}
+                      <span className="block text-[11px] text-slate-500 font-mono">
+                        ${coin.price.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                      </span>
+                    </td>
+
+                    {/* 24h Prozent */}
+                    <td className="py-4 px-4 text-right font-mono">
+                      <span
+                        className={`inline-flex items-center gap-1 font-bold ${
+                          isPositive ? 'text-emerald-400' : 'text-rose-500'
+                        }`}
+                      >
+                        {isPositive ? '+' : ''}{coin.change24h.toFixed(2)}%
+                      </span>
+                    </td>
+
+                   
+
+                    {/* Alarm-Button */}
+                    <td className="py-4 px-4 text-center">
+                      <button onClick={() => setSelectedCoin(coin)} className="p-2 bg-slate-800 hover:bg-emerald-500 hover:text-slate-950 text-slate-300 rounded-lg transition-all border border-slate-700/60 inline-flex items-center justify-center">
+                        
+                        <BellPlus className="w-4 h-4" />
+                      </button>
+                      
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        
         </div>
-      </div>
-
-      {/* Coin Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        {Object.values(coins).map((coin) => {
-          const isPositive = coin.change24h >= 0;
-
-          return (
-            <div
-              key={coin.symbol}
-              className="bg-slate-900/40 backdrop-blur-md border border-slate-800/80 rounded-2xl p-6 hover:border-slate-700 transition-all shadow-xl relative overflow-hidden group"
-            >
-              <div className="flex items-start justify-between">
-                <div>
-                  <h3 className="text-lg font-bold text-white">{coin.name}</h3>
-                  <span className="text-xs font-mono text-slate-400">{coin.symbol}</span>
-                </div>
-                <div
-                  className={`flex items-center gap-1 text-xs font-bold px-2.5 py-1 rounded-lg ${
-                    isPositive
-                      ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
-                      : 'bg-rose-500/10 text-rose-400 border border-rose-500/20'
-                  }`}
-                >
-                  {isPositive ? <TrendingUp className="w-3.5 h-3.5" /> : <TrendingDown className="w-3.5 h-3.5" />}
-                  <span>{isPositive ? `+${coin.change24h}%` : `${coin.change24h}%`}</span>
-                </div>
-              </div>
-
-              {/* Price Display */}
-              <div className="mt-6 mb-4">
-                <span className="text-xs text-slate-500 block mb-1">Aktueller Kurs</span>
-                <span className="text-3xl font-extrabold font-mono text-white tracking-tight">
-                  ${coin.price.toLocaleString('en-US', { minimumFractionDigits: 2 })}
-                </span>
-              </div>
-
-              {/* Action Button */}
-              <button className="w-full mt-2 bg-slate-800 hover:bg-emerald-500 hover:text-slate-950 text-slate-200 font-medium py-2 rounded-xl transition-all duration-200 flex items-center justify-center gap-2 text-sm border border-slate-700/60">
-                <BellPlus className="w-4 h-4" />
-                <span>Alarm setzen</span>
-              </button>
-            </div>
-          );
-        })}
+      <CreateAlertModal 
+                      isOpen={selectedCoin != null} 
+                      initialSymbol={selectedCoin?.symbol}
+                      onClose={() => setSelectedCoin(null)}
+                      />
       </div>
     </div>
   );

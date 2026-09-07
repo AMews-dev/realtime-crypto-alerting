@@ -2,7 +2,7 @@ import asyncio
 
 from sqlalchemy.orm import Session
 
-from shared.schemas import BotCreateSchema
+from shared.allschemas import BotCreateSchema
 from ..bots.bot import Bot
 import logging
 import json
@@ -10,6 +10,7 @@ from pathlib import Path
 from shared.bot_model import BotModel
 from ..handlers.handler import BaseHandler
 from datetime import datetime
+from database import SessionLocal
 
 ws_url = "wss://stream.binance.com:9443/ws"
 completeUrl = "wss://stream.binance.com:9443/ws/btcusdt@trade"
@@ -21,22 +22,6 @@ class BotManager:
         self.notification_queue = notification_queue
         self.active_bots: dict[str, Bot] = {}
         # self.load_bots()
-
-    """"
-    def create_bot(self, data: dict, db: Session):
-        data_obj = BotCreate(**data)
-
-        bot = Bot(data_obj)
-        logging.info(f"Bot with id:[{data["id"]}] wurde erstellt")
-        print(f"Bot mit Id: {data["id"]} wurde erstellt")
-        db.add(bot)
-        # self.bots[bot.id] = bot
-
-        #data_dict = bot.to_dict()
-        #self.save_bots(data_dict)
-
-        return bot
-    """
 
     def create_bot(self, data_schema, db):
         now = datetime.now()
@@ -128,6 +113,29 @@ class BotManager:
                 await asyncio.sleep(1)
             except Exception as e:
                 logging.error(f"Fehler beim Wiederherstellen von Bot {db_bot.id}: {e}")
+
+    async def reload_bot_alerts(self, symbol: str):
+        raw_symbol = symbol.upper().replace("USDT", "").strip()
+        full_symbol = f"{raw_symbol}USDT"
+
+        # Key im Dictionary finden
+        bot_key = full_symbol if full_symbol in self.active_bots else raw_symbol
+
+        if bot_key in self.active_bots:
+            bot = self.active_bots[bot_key]
+
+            # Frische Session öffnen -> Daten laden -> Session schließen
+            db = SessionLocal()
+            try:
+                db.expire_all()  # Zwingt SQLAlchemy, die Daten echt aus der Postgres/SQLite DB zu holen
+                await bot.load_alerts(db)
+                print(f"🔄 RAM-Cache für Bot '{bot_key}' erfolgreich aktualisiert!")
+            finally:
+                db.close()
+        else:
+            # Falls für den Coin noch gar kein Bot lief -> Jetzt starten!
+            #await self.start_bot_for_symbol(full_symbol)
+            print("bot night da")
 
 
 if __name__ == "__main__":

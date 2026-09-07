@@ -2,11 +2,14 @@ import asyncio
 import logging
 import json
 import websockets
-from sqlalchemy import Null
+from sqlalchemy import Null, not_
+from typing_inspection.typing_objects import is_self
 
-from shared.price_alarm_model import PriceAlarm
+from ..alarm_evaluator import evaluate_alarm_condition
+from database import SessionLocal
+from shared.models.price_alarm_model import PriceAlarm
 
-
+from datetime import datetime, timezone
 class Bot:
     def __init__(self, db_bot, db_session, notification_queue):
 
@@ -24,6 +27,32 @@ class Bot:
     def create_new_bot(cls, db_bot, db_session, notification_queue):
         return cls(db_bot, db_session, notification_queue)
 
+    async def load_alerts(self, db):
+        """Lädt alle aktiven Alarme für diesen Coin inkl. aller neuen Felder."""
+        raw_symbol = self.symbol.upper().replace("USDT", "").strip()
+        alarms = db.query(PriceAlarm).filter(
+            PriceAlarm.coin_symbol.in_([raw_symbol, f"{raw_symbol}USDT"]),
+            PriceAlarm.is_active == True,  # bzw. PriceAlarm.is_active
+            PriceAlarm.is_triggered == False  # bzw. not_(PriceAlarm.is_triggered)
+        ).all()
+
+        self.cached_alerts = alarms
+        # self.cached_alerts = [
+        #     {
+        #         "id": a.id,
+        #         "alarm_type": a.alarm_type,  # Enum (ABSOLUTE_PRICE, DYNAMIC_PERCENTAGE, ...)
+        #         "direction": a.direction,  # Enum (ABOVE, BELOW, BOTH)
+        #         "target_price": a.target_price,
+        #         "target_percentage": a.target_percentage,
+        #         "reference_price": a.reference_price,
+        #         "timeframe_minutes": a.timeframe_minutes,
+        #         "user_id": a.user_id,
+        #         "obj": a  # Behält das DB-Objekt für den Evaluator
+        #     } for a in alarms
+        # ]
+        print(f"🧠 [RAM-CACHE OK] {self.symbol}: {len(self.cached_alerts)} Alarme geladen.")
+        logging.info(f"[{self.id}] {len(self.cached_alerts)} Alarme geladen für {self.symbol}.")
+
     @classmethod
     def from_state(cls, state: dict):
         return cls(
@@ -33,18 +62,7 @@ class Bot:
             running=state["running"]
         )
 
-    async def load_alerts(self, db):
-        alarms = db.query(PriceAlarm).filter(PriceAlarm.symbol == self.symbol, PriceAlarm.is_triggered == False).all()
-        self.cached_alerts = [
-            {
-                "id": a.id,
-                "activation_price": a.activation_price,
-                "target_price": a.target_price,
-                "target_percentage": a.target_percentage,
-                "direction": a.direction.upper(),  # "UP" oder "DOWN"
-                "user_id": a.user_id
-            } for a in alarms
-        ]
+
 
     def to_dict(self):
         return {
@@ -62,7 +80,12 @@ class Bot:
         print(f"[{self.id}] Bot läuft...")
         print(self.running)
         logging.info(f"[{self.id}] Starting Bot")
+        db = SessionLocal()
 
+        try:
+            await self.load_alerts(db)
+        finally:
+            db.close()
         while self.running:
             try:
                 async with websockets.connect(self.stream_url) as ws:
@@ -76,44 +99,25 @@ class Bot:
 
                         triggered = []
 
-                        for alarm in self.cached_alerts:
-                            # -----------------------------------------------------------
-                            # FALL 1: Absoluter Preis-Alarm (target_price ist gesetzt)
-                            # -----------------------------------------------------------
-                            if alarm["target_price"] is not None:
-                                if alarm["direction"] == "UP" and current_price >= alarm["target_price"]:
-                                    triggered.append(alarm)
-                                elif alarm["direction"] == "DOWN" and current_price <= alarm["target_price"]:
-                                    triggered.append(alarm)
+                        # 3. Durch den RAM-Cache iterieren (Verwendung deiner neuen evaluate_alarm_condition Funktion)
+                        for alarm in list(self.cached_alerts):
+                            # Wenn cached_alerts Objekte sind:
+                            if evaluate_alarm_condition(alarm, current_price):
+                                triggered.append(alarm)
 
-                            # -----------------------------------------------------------
-                            # FALL 2: Prozentualer Alarm (Prozent + Aktivierungspreis)
-                            # -----------------------------------------------------------
-                            elif alarm["target_percentage"] is not None and alarm["activation_price"] is not None:
-                                # Berechne, wie viel Prozent sich der Preis seit der Aktivierung verändert hat
-                                # Formel: ((Aktueller Preis - Startpreis) / Startpreis) * 100
-                                price_change_pct = ((current_price - alarm["activation_price"]) / alarm[
-                                    "activation_price"]) * 100
-
-                                if alarm["direction"] == "UP" and price_change_pct >= alarm["target_percentage"]:
-                                    triggered.append(alarm)
-                                elif alarm["direction"] == "DOWN" and price_change_pct <= -alarm["target_percentage"]:
-                                    # Hinweis: Bei "DOWN" fällt der Preis, die Änderung wird negativ (z.B. -5%)
-                                    triggered.append(alarm)
-
-                            # Wenn Alarme ausgelöst wurden, verarbeiten (DB Update + Notification Queue)
+                        # 4. Wenn Alarme ausgelöst wurden
                         if triggered:
-                            await self._handle_triggered_alerts(triggered)
-
+                            await self._handle_triggered_alerts(triggered, current_price)
 
             except asyncio.CancelledError:
-
-                print(f"👋 Task für {self.symbol} gecancelt. Schließe Verbindung sofort.")
-
-                break  #
+                print(f"👋 Task für {self.symbol} gecancelt. Schließe Verbindung.")
+                break
             except Exception as e:
-                print(f"Fehler: {e}")
+                logging.error(f"[{self.id}] Fehler im WebSocket {self.symbol}: {e}")
+                print(f"Fehler im WebSocket {self.symbol}: {e}")
                 await asyncio.sleep(5)
+
+
 
     async def stop(self):
         logging.info(f"[{self.id}] Stopping bot")
@@ -121,8 +125,39 @@ class Bot:
         if self.task:
             self.task.cancel()
 
-    async def _handle_triggered_alerts(self, triggered):
-        return Null
+    async def _handle_triggered_alerts(self, triggered, current_price:float):
+        db = SessionLocal()
+        try :
+            # 1. DB-Status für alle getriggerten Alarme aktualisieren
+            triggered_ids = [alarm.id for alarm in triggered]
+            db.query(PriceAlarm).filter(PriceAlarm.id.in_(triggered_ids)).update(
+                {
+                    PriceAlarm.is_triggered: True,
+                    PriceAlarm.is_active: False,
+                    PriceAlarm.last_triggered_at: datetime.now(timezone.utc)
+                },
+                synchronize_session=False
+            )
+            db.commit()
+
+            self.cached_alerts = [a for a in self.cached_alerts if a.id not in triggered_ids]
+            for alarm in triggered:
+                payload = {
+                    "alarm_id": alarm.id,
+                    "user_id": alarm.user_id,
+                    "symbol": self.symbol,
+                    "triggered_price": current_price
+                }
+                if self.notification_queue:
+                    await self.notification_queue.put(payload)
+
+                print(f"🚨 ALARM AUSGELÖST! [ID: {alarm.id}] {self.symbol} bei ${current_price}")
+
+        except Exception as e:
+            db.rollback()
+            logging.error(f"Fehler beim Speichern ausgelöster Alarme: {e}")
+        finally:
+            db.close()
 
 
 if __name__ == "__main__":

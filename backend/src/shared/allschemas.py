@@ -48,32 +48,7 @@ class CreateAlertSchema(BaseModel):
             raise ValueError("Du musst entweder einen 'target_price' oder ein 'target_percentage' angeben.")
         return self
 
-#Response model
-class AlertResponseSchema(BaseModel):
-    id: int                              # Eindeutige ID aus der DB
-    user_id: int                         # Zuordnung zum User
-    coin_symbol: str                     # z.B. "BTCUSDT"
-    activation_price: Optional[float]   # Preis beim Erstellen
-    is_active: bool                      # Ob der Alarm scharf geschaltet ist
-    target_percentage: Optional[float]   # z.B. 5.0 (oder None)
-    target_price: Optional[float]        # z.B. 95000.0
-    direction: str                       # "UP" oder "DOWN"
-    is_triggered: bool                   # Wurde der Alarm bereits ausgelöst?
-    created_at: datetime                 # Erstellungsdatum
-    updated_at: datetime
-    # WICHTIG für SQLAlchemy: Wandelt DB-Modelle automatisch in Pydantic-JSON um
-    model_config = ConfigDict(from_attributes=True)
 
-@dataclass
-class CreateAlertResponseSchema(BaseModel):
-    user_id: int
-    coin_symbol: str
-    direction: str
-    # Optionale Felder mit Standardwerten belegen
-    activation_price: Optional[float] = None
-    is_active: bool = True
-    target_percentage: Optional[float] = None
-    target_price: Optional[float] = None
 
 
 class CreateUser(BaseModel):
@@ -98,3 +73,4 @@ class CreateUser(BaseModel):
 class UserLogin(BaseModel):
     email: EmailStr
     password: str
+

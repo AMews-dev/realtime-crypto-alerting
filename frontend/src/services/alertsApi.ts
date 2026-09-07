@@ -1,26 +1,30 @@
 import { useAuthStore } from "../features/auth/authStore";
+export type AlarmType = 'ABSOLUTE_PRICE' | 'DYNAMIC_PERCENTAGE' | 'TIMEFRAME_PERCENTAGE';
+export type AlarmDirection = 'ABOVE' | 'BELOW' | 'BOTH';
 
 export interface CreateAlertDTO  {
-    coin_symbol : string,
-    activation_price: number | null, 
-    is_active:boolean, 
-    target_percentage: number | null, 
-    target_price: number | null, 
-    direction: "UP" | "DOWN"
+    coin_symbol: string;
+    alarm_type: AlarmType;
+    direction: AlarmDirection;
+    target_price: number | null;
+    target_percentage: number | null;
+    timeframe_minutes: number | null;
+    reference_price?: number | null;
 }
 
 export interface AlertResponse  {
-    id: number;
-    user_id: number;
-    coin_symbol: string;
-    activation_price: number | null;
-    is_active: boolean;
-    target_percentage: number | null;
-    target_price: number | null;
-    direction: 'UP' | 'DOWN';
-    is_triggered: boolean;
-    created_at: string;
-    updated_at: string; // 👈 Neu hinzugefügt 
+  id: number;
+  user_id: number;
+  coin_symbol: string;
+  alarm_type: AlarmType;
+  direction: AlarmDirection;
+  target_price: number | null;
+  target_percentage: number | null;
+  timeframe_minutes: number | null;
+  reference_price: number | null;
+  is_triggered: boolean;
+  created_at: string;
+  updated_at?: string;
 }
 
 export async function createAlert(data: CreateAlertDTO) {
