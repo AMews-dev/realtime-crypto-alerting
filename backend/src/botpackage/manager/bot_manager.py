@@ -1,6 +1,7 @@
 import asyncio
 
 from sqlalchemy.orm import Session
+from starlette.websockets import WebSocket
 
 from shared.allschemas import BotCreateSchema
 from ..bots.bot import Bot
@@ -22,6 +23,42 @@ class BotManager:
         self.notification_queue = notification_queue
         self.active_bots: dict[str, Bot] = {}
         # self.load_bots()
+        self.frontend_connections: list[WebSocket] = []
+
+    async def connect_frontend(self, websocket: WebSocket):
+        await websocket.accept()
+        self.frontend_connections.append(websocket)
+        logging.info(f"Client verbunden. Altive frontends: {len(self.frontend_connections)}")
+
+    def disconnect_frontend(self, websocket: WebSocket):
+        if websocket in self.frontend_connections:
+            self.frontend_connections.remove(websocket)
+            logging.info(f"🔴 Client getrennt. Aktive Frontends: {len(self.frontend_connections)}")
+
+    async def broadcast_to_frontends(self, message:dict):
+        for connection in list(self.frontend_connections):
+            try:
+                await connection.send_json(message)
+            except Exception:
+                self.disconnect_frontend(connection)
+    async def listen_to_queue(self):
+        """
+                🚀 DAS GEGENSTÜCK ZUM BOT:
+                Liest permanent Events aus der notification_queue und leitet sie an das Frontend weiter.
+                """
+        logging.info("📡 Queue-Listener gestartet...")
+        while True:
+            try:
+                # Wartet auf das Paket vom Bot
+                event = await self.notification_queue.get()
+
+                # Leitet PRICE_UPDATE oder ALARM_TRIGGERED an die Browser weiter
+                await self.broadcast_to_frontends(event)
+
+                self.notification_queue.task_done()
+            except Exception as e:
+                logging.error(f"Fehler im Queue-Listener: {e}")
+
 
     def create_bot(self, data_schema, db):
         now = datetime.now()
@@ -43,10 +80,11 @@ class BotManager:
         symbol = db_bot.symbol.upper()
         if symbol in self.active_bots:
             return {"status": "ok", "msg": f"Bot für {symbol} läuft bereits."}
+        #create botobjekt
         newBot = Bot.create_new_bot(db_bot, db_session=self.db_session, notification_queue=self.notification_queue)
-
         self.active_bots[symbol] = newBot
-        newBot.running = True
+
+        #add task
         newBot.task = asyncio.create_task(newBot.run())
 
         db_bot.is_running = True

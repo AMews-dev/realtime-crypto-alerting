@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useAuthStore } from '../../auth/authStore';
 import { TrendingUp, TrendingDown, BellPlus, Wifi, WifiOff } from 'lucide-react';
 import { CreateAlertModal } from '../../alerts/CreateAlertModal';
+import { useCryptoPrices } from '../useCryptoWebSocket';
 interface CoinData {
   symbol: string;
   name: string;
@@ -18,7 +19,8 @@ export function DashboardPage() {
     SOLUSDT: { symbol: 'SOLUSDT', name: 'Solana', price: 180, change24h: 5.8 },
   });
   const [isConnected, setIsConnected] = useState(false);
-
+const prices = useCryptoPrices();
+console.log("coins prices", prices)
   // WebSocket-Verbindung zu FastAPI
   useEffect(() => {
     if (!token) return;

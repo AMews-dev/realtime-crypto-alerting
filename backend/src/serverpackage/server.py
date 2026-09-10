@@ -1,5 +1,5 @@
 import uvicorn
-from fastapi import FastAPI, HTTPException, Request, Depends, status, Response, BackgroundTasks
+from fastapi import FastAPI, HTTPException, Request, Depends, status, Response, BackgroundTasks, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 from botpackage.manager import BotManager
@@ -23,8 +23,7 @@ import asyncio
 from datetime import timedelta
 
 notification_queue = asyncio.Queue()
-db = SessionLocal()
-manager = BotManager(db_session=db, notification_queue=notification_queue)
+manager = BotManager(db_session=None, notification_queue=notification_queue)
 
 
 @asynccontextmanager
@@ -38,19 +37,22 @@ async def lifespan(app: FastAPI):
     Base.metadata.create_all(bind=engine)
     print("📁 Tabellen-Struktur überprüft/erstellt.")
 
-    # restore active bots from db after server went offline
+    # queue listeneder
+    queue_task = asyncio.create_task(manager.listen_to_queue())
+    print("botmanager queue listeneer im background gestartet")
 
+    startup_db = SessionLocal()
     try:
-        await manager.restore_active_bots(db=db)
+        await manager.restore_active_bots(db=startup_db)
     except Exception as e:
         print(f"⚠️ Fehler bei der Bot-Wiederherstellung: {e}")
     finally:
-        db.close()
+        startup_db.close()
 
     yield  # Ab hier läuft der Server ganz normal und nimmt App-Anfragen an
 
     print("🛑 Server wird heruntergefahren...")
-
+    queue_task.cancel()
 
 limiter = Limiter(key_func=get_remote_address)
 
@@ -69,6 +71,17 @@ app.add_middleware(
     allow_headers=["*"]
 )
 
+@app.websocket("/ws/prices")
+async def websocket_prices(websocket: WebSocket):
+    #accept connection
+    await manager.connect_frontend(websocket)
+    try:
+        while True:
+            # hold connection open
+            await websocket.receive_text()
+    except WebSocketDisconnect:
+        #clearn browser close
+        manager.disconnect_frontend(websocket)
 
 @app.get("/")
 def test():

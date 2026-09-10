@@ -27,32 +27,25 @@ class Bot:
     def create_new_bot(cls, db_bot, db_session, notification_queue):
         return cls(db_bot, db_session, notification_queue)
 
-    async def load_alerts(self, db):
+    async def load_alerts(self):
         """Lädt alle aktiven Alarme für diesen Coin inkl. aller neuen Felder."""
         raw_symbol = self.symbol.upper().replace("USDT", "").strip()
-        alarms = db.query(PriceAlarm).filter(
-            PriceAlarm.coin_symbol.in_([raw_symbol, f"{raw_symbol}USDT"]),
-            PriceAlarm.is_active == True,  # bzw. PriceAlarm.is_active
-            PriceAlarm.is_triggered == False  # bzw. not_(PriceAlarm.is_triggered)
-        ).all()
 
-        self.cached_alerts = alarms
-        # self.cached_alerts = [
-        #     {
-        #         "id": a.id,
-        #         "alarm_type": a.alarm_type,  # Enum (ABSOLUTE_PRICE, DYNAMIC_PERCENTAGE, ...)
-        #         "direction": a.direction,  # Enum (ABOVE, BELOW, BOTH)
-        #         "target_price": a.target_price,
-        #         "target_percentage": a.target_percentage,
-        #         "reference_price": a.reference_price,
-        #         "timeframe_minutes": a.timeframe_minutes,
-        #         "user_id": a.user_id,
-        #         "obj": a  # Behält das DB-Objekt für den Evaluator
-        #     } for a in alarms
-        # ]
-        print(f"🧠 [RAM-CACHE OK] {self.symbol}: {len(self.cached_alerts)} Alarme geladen.")
-        logging.info(f"[{self.id}] {len(self.cached_alerts)} Alarme geladen für {self.symbol}.")
+        db = SessionLocal()
+        try:
+            alarms = db.query(PriceAlarm).filter(
+                PriceAlarm.coin_symbol.in_([raw_symbol, f"{raw_symbol}USDT"]),
+                PriceAlarm.is_active == True,  # bzw. PriceAlarm.is_active
+                PriceAlarm.is_triggered == False  # bzw. not_(PriceAlarm.is_triggered)
+            ).all()
 
+            db.expunge_all()
+            self.cached_alerts = alarms
+
+            print(f"🧠 [RAM-CACHE OK] {self.symbol}: {len(self.cached_alerts)} Alarme geladen.")
+            logging.info(f"[{self.id}] {len(self.cached_alerts)} Alarme geladen für {self.symbol}.")
+        finally:
+            db.close()
     @classmethod
     def from_state(cls, state: dict):
         return cls(
@@ -77,26 +70,38 @@ class Bot:
         return f"Bot(id={self.id}, symbol='{self.symbol}', running={self.running}, stream={self.stream_url})"
 
     async def run(self):
+        self.running = True
+
         print(f"[{self.id}] Bot läuft...")
         print(self.running)
-        logging.info(f"[{self.id}] Starting Bot")
-        db = SessionLocal()
 
-        try:
-            await self.load_alerts(db)
-        finally:
-            db.close()
+        logging.info(f"[{self.id}] Starting Bot")
+        await self.load_alerts()
+
         while self.running:
             try:
                 async with websockets.connect(self.stream_url) as ws:
                     logging.info(f"[{self.id}] Connected to {self.stream_url}")
                     print(f"[{self.id}] Verbunden mit {self.stream_url}")
 
-                    while self.running:
-                        msg = await ws.recv()
+                    async for msg in ws:
+                        if not self.running:
+                            break
+
                         data = json.loads(msg)
+                        if 'c' not in data:
+                            continue
                         current_price = float(data['c'])  # Aktueller Preis von Binance
 
+                        # Preissignal an Frontend weiterleiten
+                        if self.notification_queue:
+                            await self.notification_queue.put({
+                                "type": "PRICE_UPDATE",
+                                "symbol": self.symbol,
+                                "price": current_price
+                            })
+
+                        # ram-cache auf getriggerte alarme prüfen
                         triggered = []
 
                         # 3. Durch den RAM-Cache iterieren (Verwendung deiner neuen evaluate_alarm_condition Funktion)
