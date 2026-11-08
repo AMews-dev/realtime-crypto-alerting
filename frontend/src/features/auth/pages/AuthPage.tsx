@@ -1,19 +1,18 @@
 import { useState, type SyntheticEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../authStore';
-import { Mail, Lock, User, AlertCircle } from 'lucide-react';
-
+import { Mail, Lock, User, AlertCircle, Eye, EyeOff } from 'lucide-react';
 
 export function AuthPage() {
   const [isLogin, setIsLogin] = useState(true);
 
   // Form States
-  const [username, setUsername] = useState(''); // Für Register
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [rememberMe, setRememberMe] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   const login = useAuthStore((state) => state.login);
   const navigate = useNavigate();
@@ -34,7 +33,7 @@ export function AuthPage() {
           email: email,
           password: password
         })
-            })
+      })
 
 
       if (!response.ok) {
@@ -67,13 +66,23 @@ export function AuthPage() {
       });
 
       if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.detail || 'Registrierung fehlgeschlagen');
+        const errorData = await response.json().catch(() => null);
+        
+        let errorMessage = 'Registrierung fehlgeschlagen';
+        if (errorData?.detail) {
+          if (typeof errorData.detail === 'string') {
+            errorMessage = errorData.detail;
+          } else if (Array.isArray(errorData.detail)) {
+            errorMessage = errorData.detail.map((err: any) => err.msg).join(', ');
+          } else if (typeof errorData.detail === 'object') {
+            errorMessage = errorData.detail.message || JSON.stringify(errorData.detail);
+          }
+        }
+        
+        throw new Error(errorMessage);
       }
 
-
       login({ email });
-
       navigate('/');
     } catch (err: any) {
       setError(err.message || 'Ein Fehler ist aufgetreten');
@@ -83,18 +92,18 @@ export function AuthPage() {
   };
 
   return (
-    <div 
+    <div
       className="min-h-screen w-full flex items-center justify-center p-4 bg-cover bg-center bg-no-repeat relative font-sans"
       style={{
-      backgroundImage: `url('/background.jpg')`, // Pfad zu deinem Bild im public-Ordner
-    }}
+        backgroundImage: `url('/background.jpg')`, // Pfad zu deinem Bild im public-Ordner
+      }}
     >
       {/* Dunkles Overlay für besseren Kontrast */}
       <div className="absolute inset-0 bg-black/60 backdrop-blur-[2px]"></div>
 
       {/* Glassmorphism Card */}
       <div className="w-full max-w-[400px] bg-white/10 backdrop-blur-md border border-white/20 rounded-2xl p-8 shadow-[0_8px_32px_0_rgba(0,0,0,0.37)] relative z-10 text-white">
-        
+
         {/* Titel */}
         <h1 className="text-3xl font-bold text-center mb-8 tracking-wide">
           {isLogin ? 'Login' : 'Registration'}
@@ -104,14 +113,14 @@ export function AuthPage() {
         {error && (
           <div className="mb-6 p-3 bg-red-500/20 border border-red-500/30 rounded-lg flex items-center gap-2 text-red-200 text-xs">
             <AlertCircle className="w-4 h-4 shrink-0" />
-            <span>{error}</span>
+            <span>{typeof error === 'string' ? error : JSON.stringify(error)}</span>
           </div>
         )}
 
         {/* Formular */}
         <form onSubmit={isLogin ? handleLogin : handleRegister} className="space-y-6">
- 
-          
+
+
 
           {/* Email Input */}
           <div className="relative border-b border-white/60 focus-within:border-white transition-all pb-1">
@@ -134,15 +143,33 @@ export function AuthPage() {
             <label className="block text-xs font-light text-slate-200">Password</label>
             <div className="flex items-center justify-between mt-1">
               <input
-                type="password"
+                type={showPassword ? "text" : "password"}
                 required
-                minLength={6}
+                minLength={8}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="••••••••••••"
                 className="w-full bg-transparent text-sm text-white focus:outline-none placeholder-slate-400/60 pr-2"
               />
-              <Lock className="w-4 h-4 text-white/80 shrink-0" />
+
+              <div className="flex items-center space-x-2 shrink-0">
+                {/* Toggle-Button für die Sichtbarkeit */}
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="text-white/80 hover:text-white transition-colors focus:outline-none"
+                  aria-label={showPassword ? "Passwort verbergen" : "Passwort anzeigen"}
+                >
+                  {showPassword ? (
+                    <EyeOff className="w-4 h-4" />
+                  ) : (
+                    <Eye className="w-4 h-4" />
+                  )}
+                </button>
+
+                {/* Lock Icon */}
+                <Lock className="w-4 h-4 text-white/80" />
+              </div>
             </div>
           </div>
 

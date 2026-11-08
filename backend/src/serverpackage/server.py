@@ -290,7 +290,6 @@ def login_user(request: Request, login_data: UserLogin, response: Response, db: 
     return {"status": "Erfolgreich eingeloggt", "is_admin": user.isAdmin}
 
 @app.post("/api/auth/refresh")
-@app.post("/api/auth/refresh")
 def refresh_token(request: Request, response: Response):
     # 1. Refresh-Token aus Cookie lesen
     re_token = request.cookies.get("refresh_token")

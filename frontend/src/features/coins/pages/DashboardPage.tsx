@@ -69,7 +69,6 @@ export function DashboardPage() {
                 // 🚀 Hier korrigiert: Sauberes Mapping ohne doppelte Klammern
                 Object.entries(coins).map(([symbol, coinData]) => {
                   const isPositive = coinData.change24h >= 0;
-                    console.log(coinData)
                   return (
                     <tr key={symbol} className="hover:bg-slate-800/40 transition-colors group cursor-pointer">
 
