@@ -13,7 +13,7 @@ https://github.com/AMews-dev/realtime-crypto-alerting/blob/master/screenshots/ad
 
 ## showalertPage
 
-https://github.com/AMews-dev/realtime-crypto-alerting/blob/master/screenshots/showalerts.PNG?raw=true
+![image](https://github.com/AMews-dev/realtime-crypto-alerting/blob/master/screenshots/showalerts.PNG?raw=true}
 
 ## Login Preview
 
