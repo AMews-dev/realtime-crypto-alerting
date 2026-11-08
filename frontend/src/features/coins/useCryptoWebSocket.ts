@@ -1,7 +1,14 @@
 import { useEffect, useState } from "react";
 
-export function useCryptoPrices() {
-  const [prices, setPrices] = useState<Record<string, number>>({});
+export interface CoinTickerInfo {
+  price: number;
+  change24h: number;
+  pair: string
+}
+
+
+export function useCryptoTickers() {
+  const [tickers, setTickers] = useState<Record<string, CoinTickerInfo>>({});
 
   useEffect(() => {
     const ws = new WebSocket("ws://localhost:8000/ws/prices");
@@ -13,22 +20,21 @@ export function useCryptoPrices() {
     ws.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data);
-        if (data.type === "PRICE_UPDATE" && data.symbol && data.price) {
-          setPrices((prev) => ({
+            if (data.type === "PRICE_UPDATE" && data.symbol && data.price) {
+          setTickers((prev) => ({
             ...prev,
-            [data.symbol]: data.price,
-          }));
-        } else if (data.symbol && data.price) {
-          setPrices((prev) => ({
-            ...prev,
-            [data.symbol]: data.price,
+            [data.symbol]: {
+              price: data.price,
+              // Falls change24h mitgeschickt wird, nutzen wir es. Sonst behalten wir den alten Wert oder 0.
+              change24h: data.change24h !== undefined ? data.change24h : (prev[data.symbol]?.change24h || 0),
+              pair: data.pair
+            },
           }));
         }
       } catch (err) {
-        console.error("Fehler beim Parsen:", err);
+        console.error("WS Parse Error:", err);
       }
     };
-
     ws.onerror = (error) => {
       console.error("WebSocket Fehler:", error);
     };
@@ -44,5 +50,5 @@ export function useCryptoPrices() {
     };
   }, []);
 
-  return prices;
+  return tickers;
 }

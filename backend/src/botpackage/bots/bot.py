@@ -92,13 +92,16 @@ class Bot:
                         if 'c' not in data:
                             continue
                         current_price = float(data['c'])  # Aktueller Preis von Binance
-
+                        change_24h = float(data['P'])
+                        pair = data['s']
                         # Preissignal an Frontend weiterleiten
                         if self.notification_queue:
                             await self.notification_queue.put({
                                 "type": "PRICE_UPDATE",
                                 "symbol": self.symbol,
-                                "price": current_price
+                                "pair": pair,
+                                "price": current_price,
+                                "change24h": change_24h
                             })
 
                         # ram-cache auf getriggerte alarme prüfen
