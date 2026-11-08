@@ -25,6 +25,24 @@ from datetime import timedelta
 notification_queue = asyncio.Queue()
 manager = BotManager(db_session=None, notification_queue=notification_queue)
 
+def seed_initial_coins():
+    """Prüft, ob Coins in der DB sind, und legt standardmäßig welche an."""
+    startup_db = SessionLocal()
+
+    #
+    # # Prüfen, ob bereits Coins existieren
+    existing_coins_count = startup_db.query(BotModel).count()
+    #
+    if existing_coins_count == 0:
+        manager.create_bot(data_schema="BTC", db=startup_db)
+        manager.start_bot(1, db=startup_db)
+    #
+    #     db.commit()
+    #     print("Standard-Coins erfolgreich erstellt!")
+    # else:
+    #     print(f"Es sind bereits {existing_coins_count} Coins in der Datenbank.")
+    #
+    # db.close(
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -32,7 +50,7 @@ async def lifespan(app: FastAPI):
     if not check_db_connection():
         print("🛑 Server-Start abgebrochen: Datenbank nicht erreichbar. Überprüfe deine DATABASE_URL!")
         sys.exit(1)  # Beendet das Python-Skript hart mit einem Fehlercode
-
+    seed_initial_coins()
     # Wenn die Verbindung steht, erstellen wir direkt die Tabellen (falls noch nicht da)
     Base.metadata.create_all(bind=engine)
     print("📁 Tabellen-Struktur überprüft/erstellt.")
