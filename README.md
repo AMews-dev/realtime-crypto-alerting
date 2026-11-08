@@ -21,7 +21,6 @@ A high-performance, event-driven cryptocurrency dashboard built with **FastAPI**
 ## Login Preview
 ![login](./screenshots/login.PNG)
 
-https://github.com/AMews-dev/realtime-crypto-alerting/blob/master/screenshots/login.PNG
 ## 🎯 Key Features
 
 - **Real-Time Data Pipeline:** Asynchronous integration with Binance WebSockets processing live tick data.
