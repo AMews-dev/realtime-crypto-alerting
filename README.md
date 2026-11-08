@@ -4,6 +4,23 @@ A high-performance, event-driven cryptocurrency dashboard built with **FastAPI**
 
 ---
 
+
+## Dashboard Preview
+
+![Dashboard](screenshots/dashboard.png)
+
+## AddAlert
+
+![Order Book](screenshots/addAlert.png)
+
+## showalertPage
+
+!(screenshots/alerts.png)
+
+## Login Preview
+
+![Dashboard](screenshots/login.png)
+
 ## 🎯 Key Features
 
 - **Real-Time Data Pipeline:** Asynchronous integration with Binance WebSockets processing live tick data.
