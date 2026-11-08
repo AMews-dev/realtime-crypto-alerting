@@ -6,8 +6,7 @@ A high-performance, event-driven cryptocurrency dashboard built with **FastAPI**
 
 
 ## Dashboard Preview
-https://github.com/AMews-dev/realtime-crypto-alerting/blob/master/screenshots/dashboard.PNG
-
+![images alt](https://github.com/AMews-dev/realtime-crypto-alerting/blob/master/screenshots/dashboard.PNG}
 ## AddAlert
 
 https://github.com/AMews-dev/realtime-crypto-alerting/blob/master/screenshots/addAlert.PNG
