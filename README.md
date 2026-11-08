@@ -86,7 +86,7 @@ The application uses an event-driven architecture designed for high throughput a
 ### 1. Repository Klonen & Datenbank (PostgreSQL)
 ```bash
 git clone https://github.com/AMews-dev/realtime-crypto-alerting.git
-cd dein-repo-name
+cd realtime-crypto-alerting
 
 # Startet die PostgreSQL-Datenbank im Hintergrund
 docker compose up -d
