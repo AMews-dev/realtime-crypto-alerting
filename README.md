@@ -6,20 +6,20 @@ A high-performance, event-driven cryptocurrency dashboard built with **FastAPI**
 
 
 ## Dashboard Preview
-
-![Dashboard](/screenshots/dashboard.png)
+![Dashboard](./screenshots/dashboard.PNG)
 
 ## AddAlert
 
-![Add Alert](screenshots/addAlert.png)
+![Add Alert](./screenshots/addAlert.PNG)
+
 
 ## showalertPage
 
-![show all created alerts](screenshots/showalerts.png)
+![show Alert](./screenshots/showalerts.PNG)
+
 
 ## Login Preview
-
-![Dashboard](screenshots/login.png)
+![login](./screenshots/login.PNG)
 
 ## 🎯 Key Features
 
@@ -86,7 +86,7 @@ The application uses an event-driven architecture designed for high throughput a
 ### 1. Repository Klonen & Datenbank (PostgreSQL)
 ```bash
 git clone https://github.com/AMews-dev/realtime-crypto-alerting.git
-cd dein-repo-name
+cd realtime-crypto-alerting
 
 # Startet die PostgreSQL-Datenbank im Hintergrund
 docker compose up -d
@@ -96,10 +96,14 @@ docker compose up -d
 Clone the repository:
    ```bash
    cd realtime-crypto-alerting/backend
-   python -m venv venv
-   source venv/bin/activate  # On Windows: venv\Scripts\activate
-   pip install -r requirements.txt
+
+# Windows:
+.\venv\Scripts\Activate
+
+# Abhängigkeiten installieren
+pip install -r requirements.txt
    cd src
+# run server:
    python -m serverpackage.server
    ```
 ### 3. Frontend Setup
