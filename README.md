@@ -16,7 +16,7 @@ https://github.com/AMews-dev/realtime-crypto-alerting/blob/master/screenshots/ad
 ![image](https://github.com/AMews-dev/realtime-crypto-alerting/blob/master/screenshots/showalerts.PNG?raw=true}
 
 ## Login Preview
-![description](./screenshots/login.png)
+![login](./screenshots/login.PNG)
 
 https://github.com/AMews-dev/realtime-crypto-alerting/blob/master/screenshots/login.PNG
 ## 🎯 Key Features
