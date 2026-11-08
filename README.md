@@ -7,15 +7,15 @@ A high-performance, event-driven cryptocurrency dashboard built with **FastAPI**
 
 ## Dashboard Preview
 
-![Dashboard](screenshots/dashboard.png)
+![Dashboard](/screenshots/dashboard.png)
 
 ## AddAlert
 
-![Order Book](screenshots/addAlert.png)
+![Add Alert](screenshots/addAlert.png)
 
 ## showalertPage
 
-!(screenshots/alerts.png)
+![show all created alerts](screenshots/showalerts.png)
 
 ## Login Preview
 
