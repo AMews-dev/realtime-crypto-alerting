@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
-import { BellPlus, X, PlusCircle, AlertCircle } from 'lucide-react';
-import type { CreateAlertDTO, AlertResponse, AlarmDirection, AlarmType } from '../../services/alertsApi';
-import { createAlert } from '../../services/alertsApi';
+import {X, PlusCircle, AlertCircle, CheckCircle2 } from 'lucide-react';
+import type { AlarmDirection, AlarmType } from '../../services/alertsApi';
 
 interface CreateAlertModalProps {
     isOpen: boolean;
@@ -24,7 +23,7 @@ export function CreateAlertModal({
     const [timeframeMinutes, setTimeframeMinutes] = useState('15');
     const [error, setError] = useState<string | null>(null);
     const [loading, setLoading] = useState(false);
-
+    const [successMessage, setSuccessMessage] = useState<string | null>(null); // NEU
     // Sync initialSymbol wenn sich die Modal-Props ändern
     useEffect(() => {
         if (initialSymbol) {
@@ -37,15 +36,16 @@ export function CreateAlertModal({
     const handleCreateAlert = async (e: React.FormEvent) => {
         e.preventDefault();
         setError(null);
+        setSuccessMessage(null); // Reset
         setLoading(true);
 
         try {
-            const response = await fetch('http://localhost:8000/api/alerts', {
+            const response = await fetch('http://localhost:8000/create-alert', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 credentials: 'include',
                 body: JSON.stringify({
-                    symbol: coinSymbol,
+                    coin_symbol: coinSymbol,
                     alarm_type: alarmType,
                     direction: direction,
                     target_price: alarmType === 'ABSOLUTE_PRICE' ? parseFloat(targetPrice) : null,
@@ -55,12 +55,30 @@ export function CreateAlertModal({
             });
 
             if (!response.ok) {
-                const data = await response.json();
-                throw new Error(data.detail || 'Fehler beim Erstellen des Alarms.');
+                const errorData = await response.json().catch(() => null);
+                
+                let errorMessage = 'Fehler beim Erstellen des Alarms.';
+                if (errorData?.detail) {
+                    if (typeof errorData.detail === 'string') {
+                        errorMessage = errorData.detail;
+                    } else if (Array.isArray(errorData.detail)) {
+                        // FastAPI Validierungsfehler-Array sauber zusammenfassen
+                        errorMessage = errorData.detail.map((err: any) => err.msg).join(', ');
+                    } else if (typeof errorData.detail === 'object') {
+                        errorMessage = errorData.detail.message || JSON.stringify(errorData.detail);
+                    }
+                }
+                
+                throw new Error(errorMessage);
             }
 
+            setSuccessMessage('Alarm erfolgreich erstellt! 🚀');
+
             if (onSuccess) onSuccess();
-            onClose();
+            setTimeout(() => {
+                setSuccessMessage(null);
+                onClose();
+            }, 1200);
         } catch (err: any) {
             setError(err.message || 'Ein unerwarteter Fehler ist aufgetreten.');
         } finally {
@@ -85,6 +103,14 @@ export function CreateAlertModal({
                         <X className="w-5 h-5" />
                     </button>
                 </div>
+
+                {/* Success Alert (NEU) */}
+                {successMessage && (
+                    <div className="mb-4 p-3 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 rounded-lg text-xs flex items-center gap-2 animate-in fade-in">
+                        <CheckCircle2 className="w-4 h-4 shrink-0" />
+                        <span>{successMessage}</span>
+                    </div>
+                )}
 
                 {/* Error Alert */}
                 {error && (
