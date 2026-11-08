@@ -96,9 +96,14 @@ docker compose up -d
 Clone the repository:
    ```bash
    cd realtime-crypto-alerting/backend
-   python -m venv venv
-   source venv/bin/activate  # On Windows: venv\Scripts\activate
-   pip install -r requirements.txt
+# Virtuelle Umgebung aktivieren:
+# Windows (PowerShell):
+.\venv\Scripts\Activate.ps1
+# macOS / Linux:
+source venv/bin/activate
+
+# Abhängigkeiten installieren
+pip install -r requirements.txt
    cd src
    python -m serverpackage.server
    ```
