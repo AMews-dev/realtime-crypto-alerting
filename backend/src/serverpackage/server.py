@@ -29,20 +29,24 @@ def seed_initial_coins():
     """Prüft, ob Coins in der DB sind, und legt standardmäßig welche an."""
     startup_db = SessionLocal()
 
-    #
+    try:
     # # Prüfen, ob bereits Coins existieren
-    existing_coins_count = startup_db.query(BotModel).count()
-    #
-    if existing_coins_count == 0:
-        manager.create_bot(data_schema="BTC", db=startup_db)
-        manager.start_bot(1, db=startup_db)
-    #
-    #     db.commit()
-    #     print("Standard-Coins erfolgreich erstellt!")
-    # else:
-    #     print(f"Es sind bereits {existing_coins_count} Coins in der Datenbank.")
-    #
-    # db.close(
+        existing_coins_count = startup_db.query(BotModel).count()
+
+        payload = BotCreateSchema(symbol="BTC")
+        if existing_coins_count == 0:
+            new_bot = manager.create_bot(data_schema=payload, db=startup_db)
+
+            if new_bot and hasattr(new_bot, "id"):
+                manager.start_bot(new_bot.id, db=startup_db)
+                print(f"Standard-Bot mit ID {new_bot.id} erfolgreich gestartet!")
+
+    except Exception as e:
+        print(f"Fehler beim Seeding der Datenbank: {e}")
+        startup_db.rollback()
+    finally:
+        # WICHTIG: Verbindung am Ende immer schließen, egal ob Erfolg oder Fehler!
+        startup_db.close()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
