@@ -103,24 +103,33 @@ class BotManager:
         # 2. ERST DANACH sicher aus dem Dictionary ziehen
         current_bot = self.active_bots[symbol]
 
-        if not current_bot.running:
-            print(f"Bot {symbol} läuft bereits nicht.")
-            return
-
-        # 3. Bot sauber beenden
         current_bot.running = False
-
         if current_bot.task:
-            current_bot.task.cancel()  # Task im Hintergrund abschießen
+            current_bot.task.cancel()
+            try:
+                await current_bot.task  # Warten bis der Task sich beendet
+            except asyncio.CancelledError:
+                pass
 
-        del self.active_bots[symbol]  # Aus dem RAM löschen
-        print(f"[RAM] Bot für '{symbol}' erfolgreich entfernt.")
+        del self.active_bots[symbol]
+        print(f"[RAM] Bot für '{symbol}' erfolgreich gestoppt und entfernt.")
 
     def update_bot(self):
         pass
 
-    def delete_bot(self):
-        pass
+    async def delete_bot(self, symbol, db: Session):
+        db_bot = db.query(BotModel).filter(BotModel.symbol == symbol).first()
+        if not db_bot:
+            raise  ValueError("did not found bot")
+        if symbol in self.active_bots:
+            try:
+                await self.stop_bot(symbol)
+            except Exception as e:
+                logging.warning(f"Konnte laufenden Bot-Task für {symbol} nicht sauber stoppen: {e}")
+
+        db.delete(db_bot)
+        db.commit()
+        logging.info(f"Bot {symbol} erfolgreich aus Datenbank und RAM gelöscht.")
 
     def get_all_bots(self, db):
         bots = db.query(BotModel).all()

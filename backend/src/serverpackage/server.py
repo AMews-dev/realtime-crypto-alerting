@@ -1,6 +1,7 @@
 import uvicorn
 from fastapi import FastAPI, HTTPException, Request, Depends, status, Response, BackgroundTasks, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
+from pydantic import constr
 from sqlalchemy.orm import Session
 from botpackage.manager import BotManager
 from serverpackage.utils.security import hash_password, verify_pw, create_access_token, get_current_user, create_refresh_token, decode_jwt
@@ -25,7 +26,7 @@ from datetime import timedelta
 notification_queue = asyncio.Queue()
 manager = BotManager(db_session=None, notification_queue=notification_queue)
 
-def seed_initial_coins():
+async def seed_initial_coins():
     """Prüft, ob Coins in der DB sind, und legt standardmäßig welche an."""
     startup_db = SessionLocal()
 
@@ -38,8 +39,10 @@ def seed_initial_coins():
             new_bot = manager.create_bot(data_schema=payload, db=startup_db)
 
             if new_bot and hasattr(new_bot, "id"):
-                manager.start_bot(new_bot.id, db=startup_db)
+                result = await manager.start_bot(new_bot.id, db=startup_db)
+                print(result)
                 print(f"Standard-Bot mit ID {new_bot.id} erfolgreich gestartet!")
+
 
     except Exception as e:
         print(f"Fehler beim Seeding der Datenbank: {e}")
@@ -54,7 +57,7 @@ async def lifespan(app: FastAPI):
     if not check_db_connection():
         print("🛑 Server-Start abgebrochen: Datenbank nicht erreichbar. Überprüfe deine DATABASE_URL!")
         sys.exit(1)  # Beendet das Python-Skript hart mit einem Fehlercode
-    seed_initial_coins()
+    await seed_initial_coins()
     # Wenn die Verbindung steht, erstellen wir direkt die Tabellen (falls noch nicht da)
     Base.metadata.create_all(bind=engine)
     print("📁 Tabellen-Struktur überprüft/erstellt.")
@@ -118,16 +121,16 @@ async def get_debug_bot_states():
             "running": bot.running,
             "stream_url": bot.stream_url,
             "cached_alerts_count": len(bot.cached_alerts),
-            "cached_alerts": [
-                {
-                    "id": a["id"],
-                    "alarm_type": str(a["alarm_type"]),
-                    "direction": str(a["direction"]),
-                    "target_price": a["target_price"],
-                    "target_percentage": a["target_percentage"],
-                    "user_id": a["user_id"]
-                } for a in bot.cached_alerts
-            ]
+            # "cached_alerts": [
+            #     {
+            #         "id": a["id"],
+            #         "alarm_type": str(a["alarm_type"]),
+            #         "direction": str(a["direction"]),
+            #         "target_price": a["target_price"],
+            #         "target_percentage": a["target_percentage"],
+            #         "user_id": a["user_id"]
+            #     } for a in bot.cached_alerts
+            # ]
         }
 
     return {
@@ -212,6 +215,11 @@ async def stopp_bot(payload: StopBotSchema, background_tasks: BackgroundTasks, d
     await manager.stop_bot(payload.symbol)
     background_tasks.add_task(update_bot_status_in_db, payload.symbol, db)
     return {"status": "ok", "msg": f"Bot {payload.symbol} wird gestoppt."}
+
+@app.delete("/delete/{symbol}")
+async def delete_bot(symbol: str, db: Session = Depends(get_db)):
+    await manager.delete_bot(symbol, db)
+    return {"status": "ok", "msg": f"Bot für {symbol} wurde erfolgreich gelöscht."}
 
 
 @app.post("/create-alert", response_model=AlertResponseSchema)
