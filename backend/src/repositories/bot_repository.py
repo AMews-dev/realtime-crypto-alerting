@@ -1,7 +1,7 @@
 from typing import Any
 
-from datetime import datetime
-
+from datetime import datetime, timezone
+from sqlalchemy import update
 from sqlalchemy import false
 
 from shared.bot_model import BotModel
@@ -10,6 +10,8 @@ from pydantic import BaseModel
 
 from utils.symbols import normalize_pair
 from exceptions.bot_exceptions import BotNotFoundError, BotRunningError
+
+
 class BotInfoResponse(BaseModel):
     id: int
     symbol: str
@@ -81,7 +83,7 @@ class BotRepository:
         )
         return [self._to_response(row) for row in rows]
 
-    def create_bot(self, symbol: str) ->BotInfoResponse | None:
+    def create_bot(self, symbol: str) -> BotInfoResponse | None:
         normalized_symbol = normalize_pair(symbol)
 
         #first search if bot with this symbol already exist in db
@@ -98,7 +100,7 @@ class BotRepository:
         normalized_symbol = normalize_pair(symbol)
 
         bot = self.get_by_symbol(normalized_symbol)
-        if bot is  None:
+        if bot is None:
             raise BotNotFoundError(normalized_symbol)
 
         # if bot is running error
@@ -112,4 +114,14 @@ class BotRepository:
 
         return bot
 
-
+    def set_running(self, bot_id: int, is_running: bool)  -> BotInfoResponse | None:
+        stmt = (
+            update(BotModel)
+            .where(BotModel.id == bot_id)
+            .values(
+                is_running=is_running,
+                updatedAt=datetime.now(timezone.utc),
+            )
+        )
+        result = self.db.execute(stmt)
+        return (result.rowcount or 0) > 0

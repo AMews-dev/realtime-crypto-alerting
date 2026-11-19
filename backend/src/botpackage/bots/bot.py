@@ -2,30 +2,25 @@ import asyncio
 import logging
 import json
 import websockets
-from sqlalchemy import Null, not_
-from typing_inspection.typing_objects import is_self
 
 from ..alarm_evaluator import evaluate_alarm_condition
 from database import SessionLocal
 from shared.models.price_alarm_model import PriceAlarm
 
 from datetime import datetime, timezone
+
+
 class Bot:
-    def __init__(self, db_bot, db_session, notification_queue):
+    def __init__(self, db_bot, notification_queue):
 
         self.id = db_bot.id
         self.symbol = db_bot.symbol
-        self.db_session = db_session
         self.notification_queue = notification_queue
         self.running = False
         self.stream_url = f"wss://stream.binance.com:9443/ws/{self.symbol.lower()}usdt@ticker"
         # self.ws_url = ws_url
         self.cached_alerts = []
         self.task: asyncio.Task | None = None
-
-    @classmethod
-    def create_new_bot(cls, db_bot, db_session, notification_queue):
-        return cls(db_bot, db_session, notification_queue)
 
     async def load_alerts(self):
         """Lädt alle aktiven Alarme für diesen Coin inkl. aller neuen Felder."""
@@ -46,6 +41,7 @@ class Bot:
             logging.info(f"[{self.id}] {len(self.cached_alerts)} Alarme geladen für {self.symbol}.")
         finally:
             db.close()
+
     @classmethod
     def from_state(cls, state: dict):
         return cls(
@@ -54,8 +50,6 @@ class Bot:
             threshold=state["threshold"],
             running=state["running"]
         )
-
-
 
     def to_dict(self):
         return {
@@ -125,17 +119,15 @@ class Bot:
                 print(f"Fehler im WebSocket {self.symbol}: {e}")
                 await asyncio.sleep(5)
 
-
-
     async def stop(self):
         logging.info(f"[{self.id}] Stopping bot")
         self.running = False
         if self.task:
             self.task.cancel()
 
-    async def _handle_triggered_alerts(self, triggered, current_price:float):
+    async def _handle_triggered_alerts(self, triggered, current_price: float):
         db = SessionLocal()
-        try :
+        try:
             # 1. DB-Status für alle getriggerten Alarme aktualisieren
             triggered_ids = [alarm.id for alarm in triggered]
             db.query(PriceAlarm).filter(PriceAlarm.id.in_(triggered_ids)).update(

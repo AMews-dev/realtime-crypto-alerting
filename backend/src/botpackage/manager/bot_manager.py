@@ -3,6 +3,7 @@ import asyncio
 from sqlalchemy.orm import Session
 from starlette.websockets import WebSocket
 
+from repositories.bot_repository import BotRepository, BotInfoResponse
 from shared.allschemas import BotCreateSchema
 from ..bots.bot import Bot
 import logging
@@ -12,6 +13,7 @@ from shared.bot_model import BotModel
 from ..handlers.handler import BaseHandler
 from datetime import datetime
 from database import SessionLocal
+from exceptions.bot_exceptions import BotNotFoundError, BotRunningError
 
 ws_url = "wss://stream.binance.com:9443/ws"
 completeUrl = "wss://stream.binance.com:9443/ws/btcusdt@trade"
@@ -71,49 +73,70 @@ class BotManager:
     #     db.refresh(db_bot)
     #     return db_bot
 
-    async def start_bot(self, bot_id: int):
-        with SessionLocal() as db_session:
-            
-        db_bot = db.query(BotModel).filter(BotModel.id == bot_id).first()
-        if not db_bot:
-            return {"status": "bot not found"}
+    async def start_bot(self, bot_id: int) -> BotInfoResponse:
+        with SessionLocal() as db:
+            repo = BotRepository(db)
+            bot_info = repo.get_by_id(bot_id)
 
-        symbol = db_bot.symbol.upper()
-        if symbol in self.active_bots:
-            return {"status": "ok", "msg": f"Bot für {symbol} läuft bereits."}
-        #create botobjekt
-        newBot = Bot.create_new_bot(db_bot, db_session=self.db_session, notification_queue=self.notification_queue)
-        self.active_bots[symbol] = newBot
+            if bot_info is None:
+                raise BotNotFoundError(str(bot_id))
+            symbol = bot_info.symbol.upper()
+            # test if bot already exist in ram
+            existing_bot = self.active_bots.get(symbol)
+            if (
+                    existing_bot is not None
+                    and existing_bot.task is not None
+                    and not existing_bot.task.done()
+            ):
+                raise BotRunningError(symbol)
 
-        #add task
-        newBot.task = asyncio.create_task(newBot.run())
+            #set db status running
+            updated_bot = repo.set_running(bot_id, True)
 
-        db_bot.is_running = True
-        db.commit()
+            if updated_bot is None:
+                raise BotNotFoundError(str(bot_id))
+            db.commit()
 
-        return {"status": "ok", "msg": f"Bot {bot_id} erfolgreich gestartet"}
+        # create bot object and start asyncio task
+        new_bot = Bot(
+            db_bot=updated_bot,
+            notification_queue=self.notification_queue,
+        )
+        self.active_bots[symbol] = new_bot
+        new_bot.task = asyncio.create_task(new_bot.run())
 
-    async def stop_bot(self, symbol: str):
+        return updated_bot
 
-        symbol = symbol.upper()
+    async def stop_bot(self, bot_id: int) -> BotInfoResponse:
 
-        # 1. ERST prüfen, ob der Bot existiert!
-        if symbol not in self.active_bots:
-            raise ValueError(f"Bot für '{symbol}' existiert nicht in den aktiven Bots.")
+        with SessionLocal() as db:
+            repo = BotRepository(db)
+            bot_info = repo.get_by_id(bot_id)
 
-        # 2. ERST DANACH sicher aus dem Dictionary ziehen
-        current_bot = self.active_bots[symbol]
+            if bot_info is None:
+                raise BotNotFoundError(str(bot_id))
 
-        current_bot.running = False
-        if current_bot.task:
-            current_bot.task.cancel()
+            symbol = bot_info.symbol.upper()
+            active_bot = self.active_bots.pop(symbol, None)
+
+
+        if active_bot is not None and active_bot.task is not None and not active_bot.task.done():
+            active_bot.task.cancel()
             try:
-                await current_bot.task  # Warten bis der Task sich beendet
+                await active_bot.task
             except asyncio.CancelledError:
                 pass
 
-        del self.active_bots[symbol]
-        print(f"[RAM] Bot für '{symbol}' erfolgreich gestoppt und entfernt.")
+        with SessionLocal() as db:
+            repo = BotRepository(db)
+            updated_bot = repo.set_running(bot_id, False)
+
+            if updated_bot is None:
+                raise BotNotFoundError(str(bot_id))
+            db.commit()
+        return updated_bot
+
+
 
     def update_bot(self):
         pass
@@ -193,8 +216,3 @@ if __name__ == "__main__":
         "symbol": "XRP",
         "threshold": 1.5
     }
-    data_obj = BotCreate(**data1)
-    print(data_obj)
-    bot = Bot(data_obj)
-    print(bot)
-    print("Test erfolgreich:", Bot)
