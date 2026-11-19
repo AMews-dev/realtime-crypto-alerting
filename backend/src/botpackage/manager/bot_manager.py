@@ -5,6 +5,7 @@ from starlette.websockets import WebSocket
 
 from repositories.bot_repository import BotRepository, BotInfoResponse
 from shared.allschemas import BotCreateSchema
+from utils.symbols import normalize_pair
 from ..bots.bot import Bot
 import logging
 import json
@@ -155,58 +156,44 @@ class BotManager:
         db.commit()
         logging.info(f"Bot {symbol} erfolgreich aus Datenbank und RAM gelöscht.")
 
-    def get_all_bots(self, db):
-        bots = db.query(BotModel).all()
-        return bots
 
-    def get_all__active_bots(self, db):
-        bots = db.query(BotModel).filter(BotModel.is_running).all()
-        return bots
-
-    def getBot(self, bot_id):
-
-        return self.bots[bot_id]
-
-    async def restore_active_bots(self, db):
+    async def restore_active_bots(self) -> None:
         logging.info("Starte Wiederherstellung der aktiven Bots aus der Datenbank...")
         print("Lade aktive Bots aus der DB...")
 
-        bots = db.query(BotModel).filter(BotModel.is_running).all()
-        if not bots:
+        with SessionLocal() as db:
+            repo = BotRepository(db)
+            running_bots = repo.get_active()  # z. B. gibt Liste von BotInfoResponse oder IDs zurück
+
+        if not running_bots:
             logging.info("Keine aktiven Bots zum Wiederherstellen gefunden.")
             return
-        print(f"Gefunden: {len(bots)} Bots werden nacheinander gestartet.")
 
-        for db_bot in bots:
+        logging.info("Gefunden: %s Bots werden nacheinander gestartet.", len(running_bots))
+
+        for bot_item in running_bots:
             try:
-                await self.start_bot(db_bot.id, db=db)
-
+                await self.start_bot(bot_item.id)
                 await asyncio.sleep(1)
             except Exception as e:
-                logging.error(f"Fehler beim Wiederherstellen von Bot {db_bot.id}: {e}")
+                logging.error("Fehler beim Wiederherstellen von Bot %s: %s", bot_item.id, e)
 
-    async def reload_bot_alerts(self, symbol: str):
-        raw_symbol = symbol.upper().replace("USDT", "").strip()
-        full_symbol = f"{raw_symbol}USDT"
 
-        # Key im Dictionary finden
-        bot_key = full_symbol if full_symbol in self.active_bots else raw_symbol
+    async def reload_bot_alerts(self, symbol: str) -> None:
+        normalized_symbol = normalize_pair(symbol)
 
-        if bot_key in self.active_bots:
-            bot = self.active_bots[bot_key]
+        bot = self.active_bots.get(normalized_symbol)
 
-            # Frische Session öffnen -> Daten laden -> Session schließen
-            db = SessionLocal()
-            try:
-                db.expire_all()  # Zwingt SQLAlchemy, die Daten echt aus der Postgres/SQLite DB zu holen
-                await bot.load_alerts(db)
-                print(f"🔄 RAM-Cache für Bot '{bot_key}' erfolgreich aktualisiert!")
-            finally:
-                db.close()
-        else:
-            # Falls für den Coin noch gar kein Bot lief -> Jetzt starten!
-            #await self.start_bot_for_symbol(full_symbol)
-            print("bot night da")
+        if bot is None:
+            logging.info("Kein aktiver Bot im RAM für %s gefunden.", normalized_symbol)
+            return
+
+        with SessionLocal() as db:
+            db.expire_all()
+            await bot.load_alerts(db)
+
+        logging.info("RAM-Cache für Bot '%s' erfolgreich aktualisiert.", normalized_symbol)
+
 
 
 if __name__ == "__main__":
