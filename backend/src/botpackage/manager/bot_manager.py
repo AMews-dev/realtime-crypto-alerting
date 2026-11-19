@@ -18,61 +18,62 @@ completeUrl = "wss://stream.binance.com:9443/ws/btcusdt@trade"
 
 
 class BotManager:
-    def __init__(self, db_session, notification_queue):
-        self.db_session = db_session
+    def __init__(self, notification_queue: asyncio.Queue):
+
         self.notification_queue = notification_queue
         self.active_bots: dict[str, Bot] = {}
         # self.load_bots()
-        self.frontend_connections: list[WebSocket] = []
 
-    async def connect_frontend(self, websocket: WebSocket):
-        await websocket.accept()
-        self.frontend_connections.append(websocket)
-        logging.info(f"Client verbunden. Altive frontends: {len(self.frontend_connections)}")
+    # async def connect_frontend(self, websocket: WebSocket):
+    #     await websocket.accept()
+    #     self.frontend_connections.append(websocket)
+    #     logging.info(f"Client verbunden. Altive frontends: {len(self.frontend_connections)}")
+    #
+    # def disconnect_frontend(self, websocket: WebSocket):
+    #     if websocket in self.frontend_connections:
+    #         self.frontend_connections.remove(websocket)
+    #         logging.info(f"🔴 Client getrennt. Aktive Frontends: {len(self.frontend_connections)}")
+    #
+    # async def broadcast_to_frontends(self, message:dict):
+    #     for connection in list(self.frontend_connections):
+    #         try:
+    #             await connection.send_json(message)
+    #         except Exception:
+    #             self.disconnect_frontend(connection)
+    # async def listen_to_queue(self):
+    #     """
+    #             🚀 DAS GEGENSTÜCK ZUM BOT:
+    #             Liest permanent Events aus der notification_queue und leitet sie an das Frontend weiter.
+    #             """
+    #     logging.info("📡 Queue-Listener gestartet...")
+    #     while True:
+    #         try:
+    #             # Wartet auf das Paket vom Bot
+    #             event = await self.notification_queue.get()
+    #
+    #             # Leitet PRICE_UPDATE oder ALARM_TRIGGERED an die Browser weiter
+    #             await self.broadcast_to_frontends(event)
+    #
+    #             self.notification_queue.task_done()
+    #         except Exception as e:
+    #             logging.error(f"Fehler im Queue-Listener: {e}")
+    #
+    #
+    # def create_bot(self, data_schema, db):
+    #     now = datetime.now()
+    #     db_bot = BotModel(
+    #         symbol=data_schema.symbol.upper(),
+    #         is_running=False,
+    #         createdAt=now
+    #     )
+    #     db.add(db_bot)
+    #     db.commit()
+    #     db.refresh(db_bot)
+    #     return db_bot
 
-    def disconnect_frontend(self, websocket: WebSocket):
-        if websocket in self.frontend_connections:
-            self.frontend_connections.remove(websocket)
-            logging.info(f"🔴 Client getrennt. Aktive Frontends: {len(self.frontend_connections)}")
-
-    async def broadcast_to_frontends(self, message:dict):
-        for connection in list(self.frontend_connections):
-            try:
-                await connection.send_json(message)
-            except Exception:
-                self.disconnect_frontend(connection)
-    async def listen_to_queue(self):
-        """
-                🚀 DAS GEGENSTÜCK ZUM BOT:
-                Liest permanent Events aus der notification_queue und leitet sie an das Frontend weiter.
-                """
-        logging.info("📡 Queue-Listener gestartet...")
-        while True:
-            try:
-                # Wartet auf das Paket vom Bot
-                event = await self.notification_queue.get()
-
-                # Leitet PRICE_UPDATE oder ALARM_TRIGGERED an die Browser weiter
-                await self.broadcast_to_frontends(event)
-
-                self.notification_queue.task_done()
-            except Exception as e:
-                logging.error(f"Fehler im Queue-Listener: {e}")
-
-
-    def create_bot(self, data_schema, db):
-        now = datetime.now()
-        db_bot = BotModel(
-            symbol=data_schema.symbol.upper(),
-            is_running=False,
-            createdAt=now
-        )
-        db.add(db_bot)
-        db.commit()
-        db.refresh(db_bot)
-        return db_bot
-
-    async def start_bot(self, bot_id: int, db: Session):
+    async def start_bot(self, bot_id: int):
+        with SessionLocal() as db_session:
+            
         db_bot = db.query(BotModel).filter(BotModel.id == bot_id).first()
         if not db_bot:
             return {"status": "bot not found"}

@@ -2,7 +2,8 @@ from sqlalchemy import Column, Integer, String, Boolean, Numeric, DateTime
 from sqlalchemy.sql import func
 from database import Base  # Deine zentrale Base-Klasse für SQLAlchemy
 from database import Base
-from datetime import datetime
+from datetime import datetime, timezone
+
 
 class BotModel(Base):
     __tablename__ = "bots"
@@ -12,10 +13,16 @@ class BotModel(Base):
 
     symbol = Column(String(100), nullable=False, index=True, unique=True)
 
-
-
-
     is_running = Column(Boolean, default=False, nullable=False, index=True)
 
-    createdAt = Column(DateTime, default=datetime.now(), nullable=False)
-    updatedAt = Column(DateTime, default=datetime.now(), onupdate=datetime.now, nullable=False)
+    createdAt = Column(
+        DateTime,
+        default=lambda: datetime.now(timezone.utc),
+        nullable=False,
+    )
+    updatedAt = Column(
+        DateTime,
+        default=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(timezone.utc),
+        nullable=False,
+    )
