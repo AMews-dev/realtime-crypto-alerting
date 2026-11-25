@@ -2,9 +2,6 @@ from http.client import HTTPException
 from fastapi import Depends, HTTPException, status, Request
 import bcrypt
 
-from serverpackage.utils.utils import FindUser
-from shared.user_model import User
-
 from datetime import datetime, timedelta, timezone
 import jwt
 

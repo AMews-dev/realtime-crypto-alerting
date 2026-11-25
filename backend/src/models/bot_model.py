@@ -1,6 +1,4 @@
-from sqlalchemy import Column, Integer, String, Boolean, Numeric, DateTime
-from sqlalchemy.sql import func
-from database import Base  # Deine zentrale Base-Klasse für SQLAlchemy
+from sqlalchemy import Column, Integer, String, Boolean,DateTime
 from database import Base
 from datetime import datetime, timezone
 

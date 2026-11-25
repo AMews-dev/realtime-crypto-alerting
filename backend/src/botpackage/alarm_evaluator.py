@@ -6,7 +6,7 @@ from sqlalchemy import not_
 from sqlalchemy.orm import Session
 
 # Passe diesen Import an dein Projekt an:
-from shared.models.price_alarm_model import PriceAlarm, AlarmType, AlarmDirection
+from models.price_alarm_model import PriceAlarm, AlarmType, AlarmDirection
 
 # -------------------------------------------------------------------
 # 1. Reine Logik zur Alarm-Evaluierung (OHNE DB-Zugriff)

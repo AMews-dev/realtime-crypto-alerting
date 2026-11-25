@@ -5,7 +5,7 @@ import websockets
 
 from ..alarm_evaluator import evaluate_alarm_condition
 from database import SessionLocal
-from shared.models.price_alarm_model import PriceAlarm
+from models.price_alarm_model import PriceAlarm
 
 from datetime import datetime, timezone
 

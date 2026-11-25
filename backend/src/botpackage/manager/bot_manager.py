@@ -1,18 +1,12 @@
 import asyncio
 
 from sqlalchemy.orm import Session
-from starlette.websockets import WebSocket
 
 from repositories.bot_repository import BotRepository, BotInfoResponse
-from shared.allschemas import BotCreateSchema
 from utils.symbols import normalize_pair
 from ..bots.bot import Bot
 import logging
-import json
-from pathlib import Path
-from shared.bot_model import BotModel
-from ..handlers.handler import BaseHandler
-from datetime import datetime
+from models.bot_model import BotModel
 from database import SessionLocal
 from exceptions.bot_exceptions import BotNotFoundError, BotRunningError
 

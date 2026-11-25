@@ -1,10 +1,8 @@
-from typing import Any
-
 from datetime import datetime, timezone
 from sqlalchemy import update
-from sqlalchemy import false
 
-from shared.bot_model import BotModel
+from sqlalchemy.engine import CursorResult
+from models.bot_model import BotModel
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 
@@ -24,12 +22,12 @@ class BotRepository:
         self.db = db
 
     @staticmethod
-    def _to_response(self, row: object) -> BotInfoResponse:
+    def _to_response(row: object) -> BotInfoResponse:
         return BotInfoResponse(
             id=getattr(row, "id"),
             symbol=getattr(row, "symbol"),
             is_running=getattr(row, "is_running"),
-            created_at=getattr(row, "created_at"),
+            created_at=getattr(row, "created_at", None),
         )
 
     def get_by_id(self, bot_id: int) -> BotInfoResponse | None:
@@ -52,7 +50,7 @@ class BotRepository:
                 BotModel.id,
                 BotModel.symbol,
                 BotModel.is_running,
-                BotModel.created_at,
+                BotModel.createdAt,
             )
             .filter(BotModel.symbol == normalized_symbol)
             .first()
@@ -65,7 +63,7 @@ class BotRepository:
                 BotModel.id,
                 BotModel.symbol,
                 BotModel.is_running,
-                BotModel.created_at,
+                BotModel.createdAt,
             )
             .all()
         )
@@ -77,9 +75,9 @@ class BotRepository:
                 BotModel.id,
                 BotModel.symbol,
                 BotModel.is_running,
-                BotModel.created_at,
+                BotModel.createdAt,
             )
-            .filter(BotModel.is_running.is_(True))
+            .filter(BotModel.is_running.is_(True)).all()
         )
         return [self._to_response(row) for row in rows]
 
@@ -114,7 +112,7 @@ class BotRepository:
 
         return bot
 
-    def set_running(self, bot_id: int, is_running: bool)  -> BotInfoResponse | None:
+    def set_running(self, bot_id: int, is_running: bool)  -> bool:
         stmt = (
             update(BotModel)
             .where(BotModel.id == bot_id)
@@ -124,4 +122,7 @@ class BotRepository:
             )
         )
         result = self.db.execute(stmt)
-        return (result.rowcount or 0) > 0
+        self.db.commit()#
+        if isinstance(result, CursorResult):
+            return (result.rowcount or 0) > 0
+        return False
